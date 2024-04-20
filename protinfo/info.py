@@ -11,6 +11,7 @@ Functions to process information about a protein:
 from argparse import ArgumentParser, RawDescriptionHelpFormatter, Namespace
 import Bio.PDB
 from collections import Counter, defaultdict
+from dataclasses import dataclass
 from protinfo import USER_MCCE, run
 import protinfo.queries as qry
 from pathlib import Path
@@ -19,7 +20,104 @@ from typing import Union
 import warnings
 
 
-DO_STEP1 = USER_MCCE is not None
+@dataclass
+class LogHdr:
+    idx: int
+    hdr: str
+    rpt_hdr: str
+    line_start: Union[None, str] = None
+    # special behaviour:
+    # if list::full line, line is skipped if in list
+    # if str::substring, line skipped if it ends with substr
+    skip_lines: Union[None, str, list] = None
+    debuglog: bool = False
+
+    def has_debuglog(self, line:str, i:int=5) -> bool:
+        """Set debug_log to True if line ends with 'saved in debug.log.
+        i is meant to be the index key of the calling dict.
+        '"""
+        if i != 5:  # only known case: free cofactor stripping
+            return
+        
+        if not self.debuglog:
+            self.debuglog = line.endswith("saved in debug.log.")
+        return
+    
+
+runlog_headers = [
+    "   Rename residue and atom names...",
+    "   Identify NTR and CTR...",
+    "   Label backbone, sidechain and altLoc conformers...",
+    "   Load pdb lines into data structure...",
+    "   Strip free cofactors with SAS >   5%...",
+    "   Check missing heavy atoms and complete altLoc conformers...",
+    "   Find distance clash (<2.000)...",
+    "   Make connectivity network ...",
+    ]
+
+
+def get_loghdr_specs(loghdrs:list) -> dict:
+    """Return a dict of LogHdr classes.
+    Note: Single quotes needed here for list of full lines?
+    """
+
+    all = defaultdict(dict)
+    for i, hdr in enumerate(loghdrs, start=1):
+        if i == 1:
+            all[i] = LogHdr(i, hdr,
+                            rpt_hdr="Renamed:",
+                            line_start="   Renaming ",
+                            )
+        elif i == 2:
+            all[i] = LogHdr(i, hdr,
+                            rpt_hdr="Terminii:",
+                            line_start="      Labeling ",
+                            )
+        elif i == 3:
+            b3_exclude = [
+                '   Creating temporary parameter file for unrecognized residue...',
+                '   Trying labeling again...',
+                '   Try delete this entry and run MCCE again',
+            ]
+            all[i] = LogHdr(i, hdr,
+                            rpt_hdr="Labeling:",
+                            line_start="      Labeling ",
+                            skip_lines=b3_exclude
+                            )
+        elif i == 4:
+            # keep as is until error found
+            all[i] = LogHdr(i, hdr,
+                            rpt_hdr="Load Structure:",
+                            )
+        elif i == 5:
+            all[i] = LogHdr(i, hdr,
+                            rpt_hdr="Free Cofactors:",
+                            skip_lines="free cofactors were stripped off in this round")
+        elif i == 6:
+            all[i] = LogHdr(i, hdr,
+                            rpt_hdr="Missing Heavy atoms:",
+                            line_start="   Missing heavy atom  ",
+                            skip_lines=['   Missing heavy atoms detected.']
+                           )
+        elif i == 7:
+            all[i] = LogHdr(i, hdr,
+                            rpt_hdr="Distance Clashes:",
+                            )
+        elif i == 8:
+            all[i] = LogHdr(i, hdr,
+                            rpt_hdr="Connectivity:",
+                            )
+        else:
+            # unknown
+            all[i] = LogHdr(i, hdr,
+                            rpt_hdr="Other:",
+                            )
+
+    return dict(all)
+
+#blocks_dict = dict(list((r, hdr) for (r, hdr) in enumerate(runlog_headers, start=1)))
+blocks_dict = get_loghdr_specs(runlog_headers)
+
 
 def check_pdb_arg(input_pdb:str) -> Union[Path, str]:
     """Validate input_pdb str, which can be either a pdb id or a pdb file."""
@@ -55,7 +153,7 @@ def info_input_prot(pdb:Path) -> dict:
 
     n_models = len(structure)
     if n_models > 1:
-        dinner["MultiModels"].append((pdbid, n_models))
+        dinner["MultiModels"].append(n_models)
     else:
         s0 = structure[0]
         chains = list(s0.get_chains())
@@ -85,34 +183,22 @@ def info_input_prot(pdb:Path) -> dict:
 
             altlocs = [(itm, cnt) for itm, cnt in c.items() if cnt > 1]
             if altlocs:
-                dc[(pdbid,cname)] = altlocs
+                dc[cname] = altlocs
                 dinner["SingleModel.Atoms.MultipleAltLocs"].append(dict(dc))
 
-        dinner["SingleModel.Chains"].append((pdbid, n_chains, cnames))
-        dinner["SingleModel.Residues"].append((pdb.stem, n_res))
+        dinner["SingleModel.Chains"].append((n_chains, cnames))
+        dinner["SingleModel.Residues"].append(n_res)
 
     if len(w):
         # Unpack the warnings list
         for i, info in enumerate(w):
-            msg = info.message.args
-            dinner["ParsedStructure.Warnings"].append((pdbid, msg))
+            # extract str past "WARNING: ":
+            msg = info.message.args[0][9:]
+            dinner["ParsedStructure.Warnings"].append(msg)
 
     dout[pdbid]["Input.ParsedStructure"] = dict(dinner)
 
     return dict(dout)
-
-
-runlog_headers = ["   Rename residue and atom names...",
-"   Identify NTR and CTR...",
-"   Label backbone, sidechain and altLoc conformers...",
-"   Load pdb lines into data structure...",
-"   Strip free cofactors with SAS >   5%...",
-"   Check missing heavy atoms and complete altLoc conformers...",
-"   Find distance clash (<2.000)...",
-"   Make connectivity network ...",
-]
-
-blocks_dict = dict(list((r, hdr) for (r, hdr) in enumerate(runlog_headers, start=1)))
 
 
 def extract_content_between_tags(text:str, tag1:str, tag2:str="   Done"):
@@ -132,23 +218,83 @@ def extract_content_between_tags(text:str, tag1:str, tag2:str="   Done"):
   return text[start_pos:end_pos]
 
 
+class S1Log:
+    """A class to parse run.log into sections, and
+    process each one of them.
+    """
+
+    def __init__(self, pdb:Path) -> None:
+        self.pdb = pdb
+        self.pdbid = self.pdb.stem
+        self.s1_dir = self.pdb.parent.joinpath("step1_run")
+        self.check_debuglog_idx = [5]
+        self.txt_blocks = self.get_blocks()
+
+
+    @staticmethod
+    def process_content_block(content:list, lhdr:LogHdr) -> list:
+
+        out = []
+        skip = lhdr.skip_lines is not None
+        change = lhdr.line_start is not None
+
+        for line in content:
+            if not line:
+                continue
+
+            if skip:
+                if isinstance(lhdr.skip_lines, str):
+                    if line.endswith(lhdr.skip_lines):
+                        continue
+                else:
+                    if line in lhdr.skip_lines:
+                        continue
+            
+            #if lhdr.idx == 5:
+            #    # flag if debug.log was mentioned;
+            #    # future use: parse debug.log?
+            #    lhdr.has_debuglog(line)
+
+            #if lhdr.idx ==3:
+            #    print(f"3. Line before change check: {line!r}")
+
+            if change:
+                # remove common start:
+                if line.startswith(lhdr.line_start):
+                    line = line[len(lhdr.line_start):]
+                    #out.append(line[len(lhdr.line_start):])
+                #if lhdr.idx ==3:
+                #    print(f"3. Line after change check: {line!r}")
+            #else:
+            out.append(line)
+
+        return out
+    
+    def get_blocks(self):
+        
+        with open(self.s1_dir.joinpath("run.log")) as fp:
+            text = fp.read()
+
+        block_txt = {}
+        for k in blocks_dict:
+            lhdr = blocks_dict[k]
+            content = extract_content_between_tags(text, lhdr.hdr).splitlines()
+            #content = [line for line in content.splitlines()]
+
+            if (lhdr.line_start is not None) or (lhdr.skip_lines is not None):
+                content = self.process_content_block(content, lhdr)
+
+            block_txt[k] = [line for line in content if line.strip()]
+            #block_txt[k] = content
+
+        return block_txt
+
 
 def info_s1_log(pdb:Path) -> dict:
 
-    pdbname = pdb.stem
-    s1_dir = run.get_s1_dir(pdb)
+    silog = S1Log(pdb)
 
-    with open(s1_dir.joinpath("run.log")) as fp:
-        text = fp.read()
-
-    block_txt = dict()
-
-    for k in blocks_dict:
-        content = extract_content_between_tags(text, blocks_dict[k])
-        block_txt[k] = [line+"\n" for line in content.splitlines() if line.strip()]
-
-    return block_txt
-
+    return silog.txt_blocks
 
 
 def write_report(input_info_d:dict=None, s1_info_d:dict=None):
@@ -173,22 +319,33 @@ def main(args):
 
     if is_pdbid:
         if not args.fetch:
-            msg = f"input_pdb ({pdb}) is not a file. If it is a valid "
-            msg = msg + "pdb id and you meant to download it, the fetch option must be True."
+            msg = f"""
+            The input_pdb parameter ({pdb}) does not resolve to a file: If it is a pdbid
+            and you meant to download its biological assembly, the fetch option must be True."""
             raise TypeError(msg)
         else:
             pdb = qry.get_rcsb_pd(pdb)
             if pdb is None:
                 raise ValueError(f"Could not download {pdb} from rcsb.org.")
+    else:
+        if args.fetch:
+            msg = f"""
+            The input_pdb parameter ({pdb}) resolves to an existing file: to OVERWRITE it
+            with the biological assembly from a fresh download, remove the extension."""
+            raise TypeError(msg)
+
             
     pdb = check_pdb_arg(args.input_pdb)
-    assert isinstance(pdb, Path)
+    #assert isinstance(pdb, Path)
 
     # Info from Bio.Parser:
     input_info_d = info_input_prot(pdb)
+
+    DO_STEP1 = USER_MCCE is not None
+
     # if multimodels, no need to run step1:
     if "MultiModels" in input_info_d[pdb.stem]["Input.ParsedStructure"]:
-        print(f"Cannot run step1 on multi-model protein {pdb.stem}")
+        print(f"MCCE cannot handle multi-model proteins such as {pdb.stem}.")
         DO_STEP1 = False
         s1_info_d = None
 
@@ -197,7 +354,7 @@ def main(args):
         run.do_step1(pdb)
         elapsed = time.time() - s1_start
         print(f"step1 took {elapsed:,.2f} s ({elapsed/60:,.2f} min).")
-        #time.sleep(3)
+        time.sleep(3)
         s1_info_d = info_s1_log(pdb)
 
     write_report(input_info_d, s1_info_d)
