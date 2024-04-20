@@ -1,3 +1,9 @@
+# local stuff
+_dev/
+_tmp/
+_tmp*
+notebooks/*.pdb*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
