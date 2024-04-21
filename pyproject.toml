@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "protinfo"
 dynamic = ["version"]
-description = "MCCE tool for obtaining structural info about a protein & how MCCE processes it in step1."""
+description = "MCCE tool for obtaining structural info about a protein & how MCCE processes it in step1."
 readme = "README.md"
 authors = [
     {name = "Cat Chenal @ GunnerLab"},
@@ -43,10 +43,11 @@ dependencies = [
 [project.urls]
 Source = "https://github.com/GunnerLab/MCCE_ProtInfo"
 
+[tool.setuptools.packages]
+find = {}
+
 [project.scripts]
-
-ProtInfo = "protfinfo.cli:prot_info_cli"
-
+ProtInfo = "protinfo.cli:prot_info_cli"
 
 [tool.setuptools_scm]
 version_file = "protinfo/_version.py"
