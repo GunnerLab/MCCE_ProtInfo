@@ -1,4 +1,5 @@
 # local stuff
+#_version.py
 _dev/
 _tmp/
 _tmp*

@@ -4,119 +4,20 @@
 Module: info.py
 Functions to process information about a protein:
  - Info about the input protein from Bio.PDB parser
- - Info from MCCE step1 run.log when step1 can be run
+ - Info from MCCE step1 run.log, debug.log when step1 can be run
 """
 
-
-from argparse import ArgumentParser, RawDescriptionHelpFormatter, Namespace
+from argparse import Namespace
 import Bio.PDB
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+import pandas as pd
 from protinfo import USER_MCCE, run
 import protinfo.queries as qry
 from pathlib import Path
 import time
 from typing import Union
 import warnings
-
-
-@dataclass
-class LogHdr:
-    idx: int
-    hdr: str
-    rpt_hdr: str
-    line_start: Union[None, str] = None
-    # special behaviour:
-    # if list::full line, line is skipped if in list
-    # if str::substring, line skipped if it ends with substr
-    skip_lines: Union[None, str, list] = None
-    debuglog: bool = False
-
-    def has_debuglog(self, line:str, i:int=5) -> bool:
-        """Set debug_log to True if line ends with 'saved in debug.log.
-        i is meant to be the index key of the calling dict.
-        '"""
-        if i != 5:  # only known case: free cofactor stripping
-            return
-        
-        if not self.debuglog:
-            self.debuglog = line.endswith("saved in debug.log.")
-        return
-    
-
-runlog_headers = [
-    "   Rename residue and atom names...",
-    "   Identify NTR and CTR...",
-    "   Label backbone, sidechain and altLoc conformers...",
-    "   Load pdb lines into data structure...",
-    "   Strip free cofactors with SAS >   5%...",
-    "   Check missing heavy atoms and complete altLoc conformers...",
-    "   Find distance clash (<2.000)...",
-    "   Make connectivity network ...",
-    ]
-
-
-def get_loghdr_specs(loghdrs:list) -> dict:
-    """Return a dict of LogHdr classes.
-    Note: Single quotes needed here for list of full lines?
-    """
-
-    all = defaultdict(dict)
-    for i, hdr in enumerate(loghdrs, start=1):
-        if i == 1:
-            all[i] = LogHdr(i, hdr,
-                            rpt_hdr="Renamed:",
-                            line_start="   Renaming ",
-                            )
-        elif i == 2:
-            all[i] = LogHdr(i, hdr,
-                            rpt_hdr="Terminii:",
-                            line_start="      Labeling ",
-                            )
-        elif i == 3:
-            b3_exclude = [
-                '   Creating temporary parameter file for unrecognized residue...',
-                '   Trying labeling again...',
-                '   Try delete this entry and run MCCE again',
-            ]
-            all[i] = LogHdr(i, hdr,
-                            rpt_hdr="Labeling:",
-                            line_start="      Labeling ",
-                            skip_lines=b3_exclude
-                            )
-        elif i == 4:
-            # keep as is until error found
-            all[i] = LogHdr(i, hdr,
-                            rpt_hdr="Load Structure:",
-                            )
-        elif i == 5:
-            all[i] = LogHdr(i, hdr,
-                            rpt_hdr="Free Cofactors:",
-                            skip_lines="free cofactors were stripped off in this round")
-        elif i == 6:
-            all[i] = LogHdr(i, hdr,
-                            rpt_hdr="Missing Heavy atoms:",
-                            line_start="   Missing heavy atom  ",
-                            skip_lines=['   Missing heavy atoms detected.']
-                           )
-        elif i == 7:
-            all[i] = LogHdr(i, hdr,
-                            rpt_hdr="Distance Clashes:",
-                            )
-        elif i == 8:
-            all[i] = LogHdr(i, hdr,
-                            rpt_hdr="Connectivity:",
-                            )
-        else:
-            # unknown
-            all[i] = LogHdr(i, hdr,
-                            rpt_hdr="Other:",
-                            )
-
-    return dict(all)
-
-#blocks_dict = dict(list((r, hdr) for (r, hdr) in enumerate(runlog_headers, start=1)))
-blocks_dict = get_loghdr_specs(runlog_headers)
 
 
 def check_pdb_arg(input_pdb:str) -> Union[Path, str]:
@@ -218,6 +119,110 @@ def extract_content_between_tags(text:str, tag1:str, tag2:str="   Done"):
   return text[start_pos:end_pos]
 
 
+@dataclass
+class LogHdr:
+    idx: int
+    hdr: str
+    rpt_hdr: str
+    line_start: Union[None, str] = None
+    # special behaviour:
+    # if list::full line, line is skipped if in list
+    # if tuple::substring, line skipped if substr in line
+    skip_lines: Union[None, list, tuple] = None
+    debuglog: bool = False
+
+    def has_debuglog(self, line:str, i:int=5) -> bool:
+        """Set debug_log to True if line ends with 'saved in debug.log.
+        i is meant to be the index key of the calling dict.
+        '"""
+        if i != 5:  # only known case: free cofactor stripping
+            return
+        
+        if not self.debuglog:
+            self.debuglog = line.endswith("saved in debug.log.")
+        return
+    
+
+runlog_headers = [
+    "   Rename residue and atom names...",
+    "   Identify NTR and CTR...",
+    "   Label backbone, sidechain and altLoc conformers...",
+    "   Load pdb lines into data structure...",
+    "   Strip free cofactors with SAS >   5%...",
+    "   Check missing heavy atoms and complete altLoc conformers...",
+    "   Find distance clash (<2.000)...",
+    "   Make connectivity network ...",
+    ]
+
+
+def get_loghdr_specs(loghdrs:list) -> dict:
+    """Return a dict of LogHdr classes.
+    Note: Single quotes needed here for list of full lines?
+    """
+
+    all = defaultdict(dict)
+    for i, hdr in enumerate(loghdrs, start=1):
+        if i == 1:
+            all[i] = LogHdr(i, hdr,
+                            rpt_hdr="Renamed:",
+                            line_start="   Renaming ",
+                            )
+        elif i == 2:
+            all[i] = LogHdr(i, hdr,
+                            rpt_hdr="Terminii:",
+                            line_start="      Labeling ",
+                            )
+        elif i == 3:
+            b3_exclude = (
+                '   Creating temporary parameter file for unrecognized residue...',
+                '   Trying labeling again...',
+                '   Try delete this entry and run MCCE again',
+                '   Error! premcce_confname()',
+                ' is already loaded somewhere else.',
+            )
+            all[i] = LogHdr(i, hdr,
+                            rpt_hdr="Labeling:",
+                            line_start="      Labeling ",
+                            skip_lines=b3_exclude
+                            )
+        elif i == 4:
+            # keep as is until error found
+            all[i] = LogHdr(i, hdr,
+                            rpt_hdr="Load Structure:",
+                            )
+        elif i == 5:
+            all[i] = LogHdr(i, hdr,
+                            rpt_hdr="Free Cofactors:",
+                            skip_lines=("free cofactors were stripped off in this round",
+                                        "saved in debug.log.")
+                           )
+        elif i == 6:
+            all[i] = LogHdr(i, hdr,
+                            rpt_hdr="Missing Heavy atoms:",
+                            line_start="   Missing heavy atom  ",
+                            skip_lines=['   Missing heavy atoms detected.']
+                           )
+        elif i == 7:
+            all[i] = LogHdr(i, hdr,
+                            rpt_hdr="Distance Clashes:",
+                            )
+        elif i == 8:
+            all[i] = LogHdr(i, hdr,
+                            rpt_hdr="Connectivity:",
+                            )
+        else:
+            # unknown
+            all[i] = LogHdr(i, hdr,
+                            rpt_hdr="Other:",
+                            )
+
+    return dict(all)
+
+
+#blocks_dict = dict(list((r, hdr) for (r, hdr) in enumerate(runlog_headers, start=1)))
+blocks_specs = get_loghdr_specs(runlog_headers)
+
+
 class S1Log:
     """A class to parse run.log into sections, and
     process each one of them.
@@ -231,43 +236,63 @@ class S1Log:
         self.txt_blocks = self.get_blocks()
 
 
+    def get_debuglog_species(self) -> str:
+
+        fp =self.s1_dir.joinpath("debug.log")
+        df = pd.read_csv(fp, sep=r"\s+", header=None, engine="python")
+        txt = "Species and properties with assigned default values in debug.log:\n"
+        for k in df[1].unique():
+            txt = txt + f"  {k}: {list(df[df[1]==k][0].unique())}\n"
+
+        return txt
+    
+
     @staticmethod
     def process_content_block(content:list, lhdr:LogHdr) -> list:
 
         out = []
         skip = lhdr.skip_lines is not None
         change = lhdr.line_start is not None
-
+        newtpl = None
+        if lhdr.idx == 3:
+            newtpl = []
+        
         for line in content:
             if not line:
                 continue
 
+            if lhdr.idx == 3:
+                if line.startswith("   Error! premcce_confname()"):
+                    # add conf name:
+                    newtpl.append(line.rsplit(maxsplit=1)[1])
+
+            if lhdr.idx == 5:
+                 # flag if debug.log was in line:
+                if not lhdr.debuglog:
+                    lhdr.has_debuglog(line)
+
             if skip:
-                if isinstance(lhdr.skip_lines, str):
-                    if line.endswith(lhdr.skip_lines):
+                if isinstance(lhdr.skip_lines, tuple):
+                    found = False
+                    for t in lhdr.skip_lines:
+                        found = found or t in line
+                    if found:
                         continue
                 else:
                     if line in lhdr.skip_lines:
                         continue
             
-            #if lhdr.idx == 5:
-            #    # flag if debug.log was mentioned;
-            #    # future use: parse debug.log?
-            #    lhdr.has_debuglog(line)
-
-            #if lhdr.idx ==3:
-            #    print(f"3. Line before change check: {line!r}")
-
             if change:
                 # remove common start:
                 if line.startswith(lhdr.line_start):
                     line = line[len(lhdr.line_start):]
-                    #out.append(line[len(lhdr.line_start):])
-                #if lhdr.idx ==3:
-                #    print(f"3. Line after change check: {line!r}")
-            #else:
-            out.append(line)
 
+            out.append(line)
+        
+        # check if new tpl confs:
+        if lhdr.idx == 3 and newtpl:
+            out.append(f"Generic topology file created for: {newtpl}")
+        
         return out
     
     def get_blocks(self):
@@ -276,16 +301,19 @@ class S1Log:
             text = fp.read()
 
         block_txt = {}
-        for k in blocks_dict:
-            lhdr = blocks_dict[k]
+        for k in blocks_specs:
+            lhdr = blocks_specs[k]
             content = extract_content_between_tags(text, lhdr.hdr).splitlines()
-            #content = [line for line in content.splitlines()]
 
             if (lhdr.line_start is not None) or (lhdr.skip_lines is not None):
                 content = self.process_content_block(content, lhdr)
 
             block_txt[k] = [line for line in content if line.strip()]
-            #block_txt[k] = content
+        
+        if blocks_specs[5].debuglog:
+            # add extra line:
+            block_txt[5].append(self.get_debuglog_species())
+
 
         return block_txt
 
@@ -345,16 +373,18 @@ def main(args):
 
     # if multimodels, no need to run step1:
     if "MultiModels" in input_info_d[pdb.stem]["Input.ParsedStructure"]:
-        print(f"MCCE cannot handle multi-model proteins such as {pdb.stem}.")
+        #print(f"MCCE cannot handle multi-model proteins such as {pdb.stem}.")
+        input_info_d[pdb.stem]["Input.Invalid"] = f"MCCE cannot handle multi-model proteins such as {pdb.stem}."
+
         DO_STEP1 = False
         s1_info_d = None
 
     if DO_STEP1:
-        s1_start = time.time()
+        #s1_start = time.time()
         run.do_step1(pdb)
-        elapsed = time.time() - s1_start
-        print(f"step1 took {elapsed:,.2f} s ({elapsed/60:,.2f} min).")
-        time.sleep(3)
+        #elapsed = time.time() - s1_start
+        #print(f"step1 took {elapsed:,.2f} s ({elapsed/60:,.2f} min).")
+        time.sleep(2)
         s1_info_d = info_s1_log(pdb)
 
     write_report(input_info_d, s1_info_d)
