@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% block head %}
+    <link rel="stylesheet" href="style.css" />
+    <title>{% block title %}{% endblock %} - MCCE ProtInfo Report</title>
+    {% endblock %}
+</head>
+<body>
+    <div id="Input.ParsedStructure">
+    {% block Input.ParsedStructure %}
+    {% endblock %}
+    </div>
+
+    <div id="MCCE.Info">
+    {% block MCCE.Info %}
+    {% endblock %}
+    </div>
+
+    <div id="footer">
+        {% block footer %}
+        This project is developped by <a href="https://github.com/GunnerLab/">The Gunner Lab @ CCNY</a>.
+        {% endblock %}
+    </div>
+</body>
+</html>
+

@@ -314,15 +314,16 @@ class S1Log:
             # add extra line:
             block_txt[5].append(self.get_debuglog_species())
 
-
         return block_txt
 
 
 def info_s1_log(pdb:Path) -> dict:
-
+    dout = {}
     silog = S1Log(pdb)
+    #match struc in prot info dict:
+    dout[pdb.stem] = {"MCCE.Info": silog.txt_blocks}
 
-    return silog.txt_blocks
+    return dout
 
 
 def write_report(input_info_d:dict=None, s1_info_d:dict=None):
