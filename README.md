@@ -27,12 +27,13 @@ Info recorded in the final report:
   * Which repairs were applied
   * Fatal errors
 
-## MCCE Recommendations: TODO
+## TODO MCCE Recommendations:
 This section will list whatever MCCE can recommend.
+
 ---
 ---
 
-# Sample Report:
+# Sample:
 
 ---
 # 1fat
