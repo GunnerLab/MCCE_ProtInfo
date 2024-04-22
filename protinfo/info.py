@@ -267,9 +267,14 @@ class S1Log:
                     newtpl.append(line.rsplit(maxsplit=1)[1])
 
             if lhdr.idx == 5:
-                 # flag if debug.log was in line:
+                # flag if debug.log was in line:
                 if not lhdr.debuglog:
                     lhdr.has_debuglog(line)
+                
+                if line.startswith("   Total deleted cofactors"):
+                    n_cof = int(line.rsplit(maxsplit=1)[1][:-1])
+                    if n_cof == 0:
+                        continue
 
             if skip:
                 if isinstance(lhdr.skip_lines, tuple):
@@ -303,16 +308,19 @@ class S1Log:
         block_txt = {}
         for k in blocks_specs:
             lhdr = blocks_specs[k]
+            rpt_k = lhdr.rpt_hdr
             content = extract_content_between_tags(text, lhdr.hdr).splitlines()
 
             if (lhdr.line_start is not None) or (lhdr.skip_lines is not None):
                 content = self.process_content_block(content, lhdr)
 
-            block_txt[k] = [line for line in content if line.strip()]
+            block_txt[rpt_k] = [line for line in content if line.strip()]
         
         if blocks_specs[5].debuglog:
             # add extra line:
-            block_txt[5].append(self.get_debuglog_species())
+            rk = blocks_specs[k].rpt_hdr
+            for line in self.get_debuglog_species().splitlines():
+                block_txt[rk].append(line)
 
         return block_txt
 

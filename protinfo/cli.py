@@ -39,6 +39,8 @@ def pi_parser():
         help = "Download the biological assembly for input_pdb (if not a file)."
     )
 
+    return p
+
 
 def prot_info_cli(argv=None):
 
@@ -52,4 +54,4 @@ def prot_info_cli(argv=None):
 
 if __name__ == "__main__":
 
-    prot_info_cli(sys.argv[:1])
+    prot_info_cli(sys.argv)
