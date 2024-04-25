@@ -9,6 +9,7 @@ name = "protinfo"
 dynamic = ["version"]
 description = "MCCE tool for obtaining structural info about a protein & how MCCE processes it in step1."
 readme = "README.md"
+ 
 authors = [
     {name = "Cat Chenal @ GunnerLab"},
 ]
@@ -16,11 +17,13 @@ maintainers = [
     {name = "Cat Chenal @ GunnerLab"},
 ]
 license = {file = "LICENSE"}
+
 keywords = [
     "biophysics",
     "proteomics",
     "cheminformatics",
 ]
+
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Biophysicists, Developers",
@@ -33,8 +36,9 @@ classifiers = [
  ]
 
 requires-python = ">=3.10"
+
 dependencies = [
-    "mcce_benchmark @ git+https://github.com/GunnerLab/MCCE_Benchmarking@main#egg=mcce_benchmark
+    "mcce_benchmark @ git+https://github.com/GunnerLab/MCCE_Benchmarking@main#egg=mcce_benchmark",
     "biopython",
     "pandas",
     "ipykernel",
@@ -42,7 +46,9 @@ dependencies = [
 ]
 
 [project.urls]
-Source = "https://github.com/GunnerLab/MCCE_ProtInfo"
+Repository = "https://github.com/GunnerLab/MCCE_ProtInfo"
+Issues = "https://github.com/GunnerLab/MCCE_ProtInfo/issues"
+#Changelog = "https://github.com/GunnerLab/MCCE_ProtInfo/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages]
 find = {}
