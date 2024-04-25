@@ -5,7 +5,7 @@ import shutil
 import warnings
 
 #................................................................................
-APP_NAME = "mcce_protinfo"
+#APP_NAME = "protinfo"
 
 NO_MCCE_MSG = """The mcce executable was not found.
 The ProtInfo report will not include any information or diagnostics from MCCE step1.py."""

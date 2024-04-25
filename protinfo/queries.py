@@ -19,8 +19,11 @@ def get_rcsb_pdb(pdbid:str) -> Union[None, Path]:
     pdb_file = bio_file[:-1]
     r = requests.get(url_rscb + bio_file, allow_redirects=True)
     if r.status_code != "200":
-        print(f"Could not download {pdb_file}:\n{r.message}")
-        return None
+        print("Trying asymmetric unit retrieval.")
+        r = requests.get(url_rscb + pdb_file, allow_redirects=True)
+        if r.status_code != "200":
+            print(f"Could not download {pdb_file}:\n{r.message}")
+            return None
     
     with open(pdb_file, 'wb') as fo:
         fo.write(r.content)
@@ -29,26 +32,11 @@ def get_rcsb_pdb(pdbid:str) -> Union[None, Path]:
     return Path(pdb_file).resolve()
 
 
-def get_rcsb_compound_info(compound_id:str) -> str:
-    """Query the RCSB api for compound information."""
+def get_pubchem_compound_link(compound_id:str) -> str:
+    """Return the unvalidated link of the PubChem page for compund_id. """
 
-    url_chemcomp = "https://data.rcsb.org/rest/v1/core/chemcomp/"
-    url_smiles2pic = "https://cactus.nci.nih.gov/chemical/structure/"
-
-    query = url_chemcomp + compound_id
-    r = requests.get(query)
-    if r.status_code != "200":
-        print(f"Query unsuccessful for {compound_id!r}:\n{r.message}")
-        return
-
-    data = json.load(r.content)
-    info_str = f"\tID: {data['chem_comp']['comp_id']}; Name: {data['chem_comp']['name']}\n"
-    info_str = info_str + f"\tFormula: {data['chem_comp']['formula']}\n"
-    info_str = info_str + f"Molecular Weight: {data['chem_comp']['formula_weight']}"
-
-    types = ["InChI", "InChIKey", "SMILES", "SMILES_CANONICAL"]
-    if data["pdbx_chem_comp_descriptor"]["type"] in types:
-        encoding = data["pdbx_chem_comp_descriptor"]["descriptor"]
-        info_str = info_str + f"\tLink to image: {url_smiles2pic}{encoding}/image\n"
-
-    return info_str
+    if compound_id:
+        url_fstr = "https://pubchem.ncbi.nlm.nih.gov/#query={}&tab=compound"
+        return url_fstr.format(compound_id.upper())
+    else:
+        return ""
