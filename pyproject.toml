@@ -34,8 +34,8 @@ classifiers = [
 
 requires-python = ">=3.10"
 dependencies = [
+    "mcce_benchmark @ git+https://github.com/GunnerLab/MCCE_Benchmarking@main#egg=mcce_benchmark
     "biopython",
-    "Jinja2",
     "pandas",
     "ipykernel",
     "pytest",
