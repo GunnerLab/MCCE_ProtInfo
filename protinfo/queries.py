@@ -19,11 +19,8 @@ def get_rcsb_pdb(pdbid:str) -> Union[None, Path]:
     pdb_file = bio_file[:-1]
     r = requests.get(url_rscb + bio_file, allow_redirects=True)
     if r.status_code != "200":
-        print("Trying asymmetric unit retrieval.")
-        r = requests.get(url_rscb + pdb_file, allow_redirects=True)
-        if r.status_code != "200":
-            print(f"Could not download {pdb_file}:\n{r.message}")
-            return None
+        print(f"Could not download {pdb_file}:\n{r.message}")
+        return None
     
     with open(pdb_file, 'wb') as fo:
         fo.write(r.content)

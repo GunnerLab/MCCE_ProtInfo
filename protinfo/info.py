@@ -48,7 +48,7 @@ def check_pdb_arg(input_pdb:str) -> Union[Path, str]:
 def process_warnings(w:PDBConstructionWarning) -> dict:
     """Function to collapse warnings into categories."""
 
-    warn_d = defaultdict(list)
+    warn_d = defaultdict(list) # output dict
     chn_d = defaultdict(list)
     unrec_l = []
     neg_l = []
@@ -57,14 +57,14 @@ def process_warnings(w:PDBConstructionWarning) -> dict:
     # Unpack the warnings list
     for i, info in enumerate(w):
         # extract str past "WARNING: ":
-        line = info.message.args[0][9:]
+        line = info.message.args[0].removeprefix("WARNING: ") #[9:]
 
         if line.startswith("Chain"):
             newl = line[:-1].replace(' is discontinuous at ', '').split('line')
             chn_d[newl[0]].append("Line"+newl[1])
         elif line.startswith("Ignoring"):
             newl = line.removeprefix("Ignoring unrecognized ").split('at')
-            unrec_l.append((newl[0].strip().capitalize(), new_l[1].strip().capitalize()))
+            unrec_l.append((newl[0].strip().capitalize(), newl[1].strip().capitalize()))
         elif line.startswith("Negative"):
             neg_l.append(line)
         elif line.startswith("Some atoms"):
@@ -144,20 +144,63 @@ def info_input_prot(pdb:Path) -> dict:
     dout[pdbid]["Input.ParsedStructure"] = dict(dinner)
     if len(w):
         warn_d = process_warnings(w)
-        #dout[pdbid]["Input.ParsedStructure"] = dict(dinner)
         dout[pdbid]["Input.ParsedStructure"]["ParsedStructure.Warnings"] = warn_d
 
     return dict(dout)
 
 
-def write_report(input_info_d:dict=None, s1_info_d:dict=None):
-    # TODO: write_report
+def get_pdb_report_lines(pdbid:str, prot_d:dict, s1_d:dict) -> str:
+    """Return the report lines for pdbid.
+    Note:
+    The input dictionaries are assumed to be the values of the
+    complete dict 'filtered' for the given pdbid, e.g.:
+        prot_d = prot_info_d[pdbid]
+    """
 
-    if input_info_d is not None:
-        print(input_info_d)
+    report = f"---\n# {pdbid}\n"
 
-    if s1_info_d is not None:
-        print(s1_info_d)
+    for i, subd in enumerate([prot_d, s1_d]):
+        k0 = list(subd.keys())[0] # section hdrs: bioparser or mcce step1
+
+        report = report + f"## {k0}\n"
+
+        for k in subd[k0]:
+            if not subd[k0][k]:
+                continue
+
+            report = report + f"### {k}\n"
+            for val in subd[k0][k]:
+                if i == 0 and k == "ParsedStructure.Warnings":
+                    report = report + f"  - <strong><font color='red'>{val}</font> </strong>\n"
+                    d = subd[k0][k][val]
+                    for w in d:
+                        report = report + f"    - {w}: {d[w]}\n"
+
+                elif i == 1 and isinstance(val, str) and val.startswith("Generic"):
+                    report = report + f"  - <strong><font color='red'>{val}</font> </strong>\n"
+                elif (isinstance(val, tuple) or isinstance(val, list)):
+                    ter, lst = val
+                    report = report + f"  * <strong>{ter} </strong> : {", ".join(lst)}\n"
+                else:
+                    report = report + f"  - {val}\n"
+            report = report + "\n"
+
+    report = report + "---\n"
+
+    return report
+
+
+def write_report(prot_info_d:dict, s1_info_d:dict, rpt_fp:Path):
+    """Write 'ProtInfo.md' report for each pdbid in the dicts."""
+
+    all_rpt = ""
+    for pdb in prot_info_d:
+        all_rpt = all_rpt + get_pdb_report_lines(pdb,
+                                                 prot_info_d[pdb],
+                                                 s1_info_d[pdb])
+
+    with open(rpt_fp, "w") as fo:
+        fo.writelines(all_rpt)
 
     return
 
@@ -195,6 +238,7 @@ def main(args):
         time.sleep(2)
         s1_info_d = info_s1_log(pdb)
 
-    write_report(input_info_d, s1_info_d)
+    rpt_fp = pdb.parent.joinpath("ProtInfo.md")
+    write_report(input_info_d, s1_info_d, rpt_fp)
 
     return

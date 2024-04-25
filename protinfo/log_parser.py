@@ -131,7 +131,7 @@ def get_log1_specs(loghdrs:list) -> dict:
                            )
         elif i == 6:
             all[i] = LogHdr(i, hdr,
-                            rpt_hdr="Missing Heavy atoms:",
+                            rpt_hdr="Missing Heavy Atoms:",
                             line_start="   Missing heavy atom  ",
                             skip_lines=['   Missing heavy atoms detected.']
                            )
@@ -202,7 +202,7 @@ class RunLog1:
                     newtpl.append(line.rsplit(maxsplit=1)[1])
 
             if lhdr.idx == 5:
-                # flag if debug.log was in line:
+                # flag if 'debug.log' found in line:
                 if not lhdr.debuglog:
                     lhdr.has_debuglog(line)
 
@@ -236,6 +236,7 @@ class RunLog1:
         return out
 
     def get_blocks(self):
+        """Extract 'processing blocks' from run.log file."""
 
         with open(self.s1_dir.joinpath("run.log")) as fp:
             text = fp.read()
@@ -250,9 +251,10 @@ class RunLog1:
 
             if (lhdr.line_start is not None) or (lhdr.skip_lines is not None):
                 content = self.process_content_block(content, lhdr)
+
             block_txt[rpt_k] = [line for line in content if line.strip()]
 
-        # process termini: '"SER A 1" as NTR'
+        # process termini; group res into NTR, CTR
         b2_hdr = blocks_specs[2].rpt_hdr
         if block_txt[b2_hdr]:
             termi = defaultdict(list)
@@ -264,7 +266,7 @@ class RunLog1:
                 block_txt[b2_hdr].append((k, termi[k]))
 
         if blocks_specs[5].debuglog:
-            # add extra line:
+            # add extra line for each species found:
             rk = blocks_specs[5].rpt_hdr
             for line in self.get_debuglog_species().splitlines():
                 block_txt[rk].append(line)
@@ -272,10 +274,30 @@ class RunLog1:
         return block_txt
 
 
+def filter_heavy_atm_section(pdb:Path, s1_info_d:dict) -> dict:
+    """Process the 'Missing Heavy Atoms:' section to remove
+    lines for missing backbone atoms of terminal residues.
+    """
+
+    term = s1_info_d[pdb.stem]["MCCE.Step1"]["Termini:"]
+    heavy = s1_info_d[pdb.stem]["MCCE.Step1"]["Missing Heavy Atoms:"]
+    hvy_lst = []
+    for line in heavy:
+        conf, res = line.split(" in ")
+        is_bkb = conf.rsplit(maxsplit=1)[1].endswith("BK")
+        if is_bkb and (res in T[1] for T in term):
+            continue
+        hvy_lst.append(line)
+    # update dict
+    s1_info_d[pdb.stem]["MCCE.Step1"]["Missing Heavy Atoms:"] = hvy_lst
+
+    return s1_info_d
+
 def info_s1_log(pdb:Path) -> dict:
     dout = {}
     silog = RunLog1(pdb)
     #match struc in prot info dict:
-    dout[pdb.stem] = {"MCCE.Info": silog.txt_blocks}
+    dout[pdb.stem] = {"MCCE.Step1": silog.txt_blocks}
+    dout = filter_heavy_atm_section(pdb, dout) 
 
     return dout

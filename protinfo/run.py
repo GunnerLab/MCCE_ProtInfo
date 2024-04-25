@@ -22,11 +22,11 @@ sleep 1
 def get_s1_dir(pdb_fp: Path) -> Path:
     """Return the step1 output dir path for pdb_fp."""
 
-    return pdb_fp.parent.joinpath("step1_run")
+    return pdb_fp.parent.joinpath("step1_run").resolve()
 
 
 def write_script(dest_dirpath:Path):
-    """Write an exceutable bash script to run mcce step1."""
+    """Write an excecutable bash script to run mcce step1."""
 
     sh_path = dest_dirpath.joinpath("s1.sh")
     with open(sh_path, "w") as fh:
@@ -74,7 +74,3 @@ def do_step1(pdb_fp: Path):
     run_step1(s1_dir)
 
     return
-
-
-#if __name__ == "__main__":
-#    do_step1(Path(sys.argv[1:]).resolve())
