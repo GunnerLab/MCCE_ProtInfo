@@ -175,7 +175,7 @@ class RunLog1:
         df = pd.read_csv(fp, sep=r"\s+", header=None, engine="python")
         txt = "Species and properties with assigned default values in debug.log:\n"
         for k in df[1].unique():
-            txt = txt + f"\t{k}: {list(df[df[1]==k][0].unique())}\n"
+            txt = txt + f"{k}: {list(df[df[1]==k][0].unique())}\n"
 
         return txt
 

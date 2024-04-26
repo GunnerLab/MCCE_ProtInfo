@@ -77,9 +77,9 @@ This section will list whatever MCCE can recommend.
 
 ### Free Cofactors:
   - Species and properties with assigned default values in debug.log:
-  - 	NAGBK: ['VDW_RAD', 'VDW_EPS']
-  - 	_MNBK: ['VDW_RAD', 'VDW_EPS']
-  - 	_CABK: ['VDW_RAD', 'VDW_EPS']
+  - NAGBK: ['VDW_RAD', 'VDW_EPS']
+  - _MNBK: ['VDW_RAD', 'VDW_EPS']
+  - _CABK: ['VDW_RAD', 'VDW_EPS']
 
 ### Missing Heavy Atoms:
   - OXT of conf CTR01 in "CTR A  36".
