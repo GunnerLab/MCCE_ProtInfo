@@ -37,17 +37,17 @@ This section will list whatever MCCE can recommend.
 
 ---
 # 1fat
-## Input.ParsedStructure
-### SingleModel.Chains
+## ParsedStructure
+### Chains
   * <strong>4 </strong> : A, B, C, D
 
-### SingleModel.Residues
+### Residues
   - 956
 
-### SingleModel.Waters
+### Waters
   - 4
 
-### ParsedStructure.Warnings
+### Warnings
   - <strong><font color='red'>Discontinuity</font> </strong>
     - Chain A: ['Line 7975', 'Line 8039']
     - Chain B: ['Line 7991', 'Line 8043']
@@ -70,13 +70,16 @@ This section will list whatever MCCE can recommend.
   * <strong>CTR </strong> : "ASN A  36", "SER A 233", "SER B 233", "ASN C  36", "SER C 233", "LEU D  35", "SER D 233"
 
 ### Labeling:
-  - <strong><font color='red'>Generic topology file created for: ['NAG', '_MN', '_CA']</font> </strong>
+  - <strong><font color='red'>Generic topology file created for:</font> </strong>
+  - NAG::  https://pubchem.ncbi.nlm.nih.gov/#query=NAG&tab=substance
+  - _MN::  https://pubchem.ncbi.nlm.nih.gov/#query=MN&tab=substance
+  - _CA::  https://pubchem.ncbi.nlm.nih.gov/#query=CA&tab=substance
 
 ### Free Cofactors:
   - Species and properties with assigned default values in debug.log:
-  -   NAGBK: ['VDW_RAD', 'VDW_EPS']
-  -   _MNBK: ['VDW_RAD', 'VDW_EPS']
-  -   _CABK: ['VDW_RAD', 'VDW_EPS']
+  - 	NAGBK: ['VDW_RAD', 'VDW_EPS']
+  - 	_MNBK: ['VDW_RAD', 'VDW_EPS']
+  - 	_CABK: ['VDW_RAD', 'VDW_EPS']
 
 ### Missing Heavy Atoms:
   - OXT of conf CTR01 in "CTR A  36".
@@ -86,9 +89,10 @@ This section will list whatever MCCE can recommend.
   - OXT of conf CTR01 in "CTR C 233".
   - OXT of conf CTR01 in "CTR D  35".
   - OXT of conf CTR01 in "CTR D 233".
-  -    Ignore warning messages if they are in the terminal residues
 
 ### Distance Clashes:
+<details><summary>Clashes found</summary>
+
   -    d= 1.53: " CA  NTR A   1" to " CB  SER A   1"
   -    d= 1.45: " ND2 ASN A  12" to " C1  NAG A 253"
   -    d= 1.53: " CA  NTR A  38" to " CB  ASN A  38"
@@ -110,5 +114,6 @@ This section will list whatever MCCE can recommend.
   -    d= 1.55: "MN   _MN C 254" to " O   HOH C 316"
   -    d= 1.50: "MN   _MN D 254" to " O   HOH D 311"
   -    d= 1.52: "MN   _MN D 254" to " O   HOH D 312"
+</details>
 
 ---

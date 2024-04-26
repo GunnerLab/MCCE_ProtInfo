@@ -17,11 +17,13 @@ def get_rcsb_pdb(pdbid:str) -> Union[None, Path]:
     pdbid = pdbid.lower()
     bio_file = pdbid + ".pdb1"
     pdb_file = bio_file[:-1]
-    r = requests.get(url_rscb + bio_file, allow_redirects=True)
-    if r.status_code != "200":
-        print(f"Could not download {pdb_file}:\n{r.message}")
+    try:
+        r = requests.get(url_rscb + bio_file, allow_redirects=True)
+        r.raise_for_status()
+    except Exception as err:
+        print(f"Error: Could not download {pdb_file}:\n{err}")
         return None
-    
+
     with open(pdb_file, 'wb') as fo:
         fo.write(r.content)
     print('Download completed.')
@@ -30,10 +32,12 @@ def get_rcsb_pdb(pdbid:str) -> Union[None, Path]:
 
 
 def get_pubchem_compound_link(compound_id:str) -> str:
-    """Return the unvalidated link of the PubChem page for compund_id. """
+    """Return the unvalidated link of the PubChem page for compund_id.
+     subtance tab
+    """
 
     if compound_id:
-        url_fstr = "https://pubchem.ncbi.nlm.nih.gov/#query={}&tab=compound"
+        url_fstr = "https://pubchem.ncbi.nlm.nih.gov/#query={}&tab=substance"
         return url_fstr.format(compound_id.upper())
     else:
         return ""

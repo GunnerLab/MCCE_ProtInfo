@@ -18,13 +18,13 @@ logger.setLevel(logging.WARNING)
 def maybe_download(pdbid:str, fetch:bool) -> Path:
 
     if not fetch:
-        msg = f"""The input_pdb parameter ({pdb}) seems to be a pdbid. To download
+        msg = f"""The input_pdb parameter ({pdbid}) seems to be a pdbid. To download
         its biological assembly, the fetch option must be True."""
         raise TypeError(msg)
 
-    pdb = qrs.get_rcsb_pd(pdb)
+    pdb = qrs.get_rcsb_pdb(pdbid)
     if pdb is None:
-        raise ValueError(f"Could not download {pdb} from rcsb.org.")
+        raise ValueError(f"Could not download {pdbid} from rcsb.org.")
    
     return pdb
 

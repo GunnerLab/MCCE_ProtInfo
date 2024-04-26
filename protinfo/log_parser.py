@@ -12,6 +12,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 import pandas as pd
 from pathlib import Path
+from protinfo import queries as qrs
 from typing import Union
 
 
@@ -152,7 +153,6 @@ def get_log1_specs(loghdrs:list) -> dict:
     return dict(all)
 
 
-#blocks_dict = dict(list((r, hdr) for (r, hdr) in enumerate(runlog_headers, start=1)))
 blocks_specs = get_log1_specs(runlog1_headers)
 
 
@@ -171,11 +171,11 @@ class RunLog1:
 
     def get_debuglog_species(self) -> str:
 
-        fp =self.s1_dir.joinpath("debug.log")
+        fp = self.s1_dir.joinpath("debug.log")
         df = pd.read_csv(fp, sep=r"\s+", header=None, engine="python")
         txt = "Species and properties with assigned default values in debug.log:\n"
         for k in df[1].unique():
-            txt = txt + f"  {k}: {list(df[df[1]==k][0].unique())}\n"
+            txt = txt + f"\t{k}: {list(df[df[1]==k][0].unique())}\n"
 
         return txt
 
@@ -198,8 +198,13 @@ class RunLog1:
 
             if lhdr.idx == 3:
                 if line.startswith("   Error! premcce_confname()"):
-                    # add conf name:
-                    newtpl.append(line.rsplit(maxsplit=1)[1])
+                    # add conf name & link:
+                    conf = line.rsplit(maxsplit=1)[1]
+                    if conf.startswith("_"):
+                        pchem = qrs.get_pubchem_compound_link(conf[1:])
+                    else:
+                        pchem = qrs.get_pubchem_compound_link(conf)
+                    newtpl.append(f"{conf}::  {pchem}")
 
             if lhdr.idx == 5:
                 # flag if 'debug.log' found in line:
@@ -207,8 +212,9 @@ class RunLog1:
                     lhdr.has_debuglog(line)
 
                 if line.startswith("   Total deleted cofactors"):
-                    n_cof = int(line.rsplit(maxsplit=1)[1][:-1])
-                    if n_cof == 0:
+                    if int(line.rsplit(maxsplit=1)[1][:-1]) != 0:
+                        line = line.strip()
+                    else:
                         continue
 
             if skip:
@@ -231,7 +237,9 @@ class RunLog1:
 
         # check if new tpl confs:
         if lhdr.idx == 3 and newtpl:
-            out.append(f"Generic topology file created for: {newtpl}")
+            out.append(f"Generic topology file created for:")
+            for t in newtpl:
+                out.append(t)
 
         return out
 
@@ -271,6 +279,15 @@ class RunLog1:
             for line in self.get_debuglog_species().splitlines():
                 block_txt[rk].append(line)
 
+        # collapse dist clashes block 7:
+        if block_txt["Distance Clashes:"]:
+            new7 = []
+            new7.append("<details><summary>Clashes found</summary>\n")
+            for d in block_txt["Distance Clashes:"]:
+                new7.append(f"  - {d}")
+            new7.append("</details>")
+            block_txt["Distance Clashes:"] = new7
+        
         return block_txt
 
 
@@ -279,8 +296,12 @@ def filter_heavy_atm_section(pdb:Path, s1_info_d:dict) -> dict:
     lines for missing backbone atoms of terminal residues.
     """
 
+    # term values: [2-tuples]
     term = s1_info_d[pdb.stem]["MCCE.Step1"]["Termini:"]
     heavy = s1_info_d[pdb.stem]["MCCE.Step1"]["Missing Heavy Atoms:"]
+    last_line = heavy.pop(-1)
+    # =Ignore warning messages if they are in the terminal residues
+
     hvy_lst = []
     for line in heavy:
         conf, res = line.split(" in ")
@@ -296,7 +317,7 @@ def filter_heavy_atm_section(pdb:Path, s1_info_d:dict) -> dict:
 def info_s1_log(pdb:Path) -> dict:
     dout = {}
     silog = RunLog1(pdb)
-    #match struc in prot info dict:
+    # set the section data with dict:
     dout[pdb.stem] = {"MCCE.Step1": silog.txt_blocks}
     dout = filter_heavy_atm_section(pdb, dout) 
 

@@ -5,6 +5,11 @@ Module: info.py
 Functions to process information about a protein:
  - Info about the input protein from Bio.PDB parser
  - Info from MCCE step1 run.log, debug.log when step1 can be run
+
+ 1. collect_info
+ 2. collect_info_lines
+ 3. save_report
+
 """
 
 from argparse import Namespace
@@ -16,7 +21,7 @@ from protinfo import USER_MCCE
 from protinfo.log_parser import info_s1_log, blocks_specs
 from protinfo import io_utils as iou, run
 import time
-from typing import Union
+from typing import Tuple, Union
 import warnings
 
 
@@ -42,6 +47,19 @@ def check_pdb_arg(input_pdb:str) -> Union[Path, str]:
     if pdb.suffix != ".pdb":
         raise TypeError(f"Not a valid extension: {pdb.suffix}")
 
+    return pdb
+
+
+def validate_input(args:Namespace) -> Path:
+    """Validate args.input_pdb and args.fetch """
+    
+    pdb = check_pdb_arg(args.input_pdb)
+    if isinstance(pdb, str):
+        pdb = iou.maybe_download(args.input_pdb, args.fetch)
+    else:
+        if args.fetch:
+            raise TypeError(ERR_FETCH_EXISTING_FILE.format(pdb))
+    
     return pdb
 
 
@@ -96,10 +114,17 @@ def info_input_prot(pdb:Path) -> dict:
 
     pdbid = pdb.stem
 
-    with warnings.catch_warnings(record=True, append=True) as w:
-        warnings.simplefilter("always", category=PDBConstructionWarning)
-        structure = parser.get_structure(pdbid, pdb.name)
+    try:
+        with warnings.catch_warnings(record=True, append=True) as w:
+            warnings.simplefilter("always", category=PDBConstructionWarning)
+            
+            structure = parser.get_structure(pdbid, pdb.name)
 
+    except Exception as ex:
+        #raise ValueError(f"Could not parse {pdb.name}:\n{ex}")
+        dout[pdbid]["ParsedStructure"]['ERROR'] = ex.args
+        return dict(dout)
+    
     n_models = len(structure)
     if n_models > 1:
         dinner["MultiModels"].append(n_models)
@@ -135,31 +160,36 @@ def info_input_prot(pdb:Path) -> dict:
             altlocs = [(itm, cnt) for itm, cnt in c.items() if cnt > 1]
             if altlocs:
                 dc[cname] = altlocs
-                dinner["SingleModel.Atoms.MultipleAltLocs"].append(dict(dc))
+                dinner["Atoms.MultipleAltLocs"].append(dict(dc))
 
-        dinner["SingleModel.Chains"].append((n_chains, cnames))
-        dinner["SingleModel.Residues"].append(n_res)
-        dinner["SingleModel.Waters"].append(n_hoh)
+        dinner["Chains"].append((n_chains, cnames))
+        dinner["Residues"].append(n_res)
+        dinner["Waters"].append(n_hoh)
 
-    dout[pdbid]["Input.ParsedStructure"] = dict(dinner)
+    dout[pdbid]["ParsedStructure"] = dict(dinner)
     if len(w):
         warn_d = process_warnings(w)
-        dout[pdbid]["Input.ParsedStructure"]["ParsedStructure.Warnings"] = warn_d
+        dout[pdbid]["ParsedStructure"]["Warnings"] = warn_d
 
     return dict(dout)
 
 
-def get_pdb_report_lines(pdbid:str, prot_d:dict, s1_d:dict) -> str:
-    """Return the report lines for pdbid.
+def get_pdb_report_lines(pdbid:str, prot_d:dict, s1_d:Union[dict, None]) -> str:
+    """Return the report lines for a pdbid for the two subsections in a
+    pdb report with PDBParser info in prot_d and Step1 info in s1_d).
     Note:
     The input dictionaries are assumed to be the values of the
-    complete dict 'filtered' for the given pdbid, e.g.:
+    complete dict 'filtered' by pdbid, the top level key, e.g.:
         prot_d = prot_info_d[pdbid]
     """
 
-    report = f"---\n# {pdbid}\n"
+    if s1_d is None:
+        dict_lst = [prot_d]
+    else:
+        dict_lst = [prot_d, s1_d]
 
-    for i, subd in enumerate([prot_d, s1_d]):
+    report = f"---\n# {pdbid}\n"
+    for i, subd in enumerate(dict_lst):
         k0 = list(subd.keys())[0] # section hdrs: bioparser or mcce step1
 
         report = report + f"## {k0}\n"
@@ -170,7 +200,7 @@ def get_pdb_report_lines(pdbid:str, prot_d:dict, s1_d:dict) -> str:
 
             report = report + f"### {k}\n"
             for val in subd[k0][k]:
-                if i == 0 and k == "ParsedStructure.Warnings":
+                if i == 0 and k == "Warnings":
                     report = report + f"  - <strong><font color='red'>{val}</font> </strong>\n"
                     d = subd[k0][k][val]
                     for w in d:
@@ -178,11 +208,16 @@ def get_pdb_report_lines(pdbid:str, prot_d:dict, s1_d:dict) -> str:
 
                 elif i == 1 and isinstance(val, str) and val.startswith("Generic"):
                     report = report + f"  - <strong><font color='red'>{val}</font> </strong>\n"
+
+                elif i == 1 and k == "Distance Clashes:":
+                    report = report + f"{val}\n"
+
                 elif (isinstance(val, tuple) or isinstance(val, list)):
                     ter, lst = val
                     report = report + f"  * <strong>{ter} </strong> : {", ".join(lst)}\n"
                 else:
                     report = report + f"  - {val}\n"
+
             report = report + "\n"
 
     report = report + "---\n"
@@ -190,45 +225,60 @@ def get_pdb_report_lines(pdbid:str, prot_d:dict, s1_d:dict) -> str:
     return report
 
 
-def write_report(prot_info_d:dict, s1_info_d:dict, rpt_fp:Path):
-    """Write 'ProtInfo.md' report for each pdbid in the dicts."""
+def collect_info_lines(prot_d:dict,
+                       s1_d:Union[dict, None]) -> str:
+    """Transform the info in each dict into printable lines."""
 
-    all_rpt = ""
-    for pdb in prot_info_d:
-        all_rpt = all_rpt + get_pdb_report_lines(pdb,
-                                                 prot_info_d[pdb],
-                                                 s1_info_d[pdb])
+    rpt_lines = ""
+    for pdb in prot_d:
+        rpt_lines = rpt_lines + get_pdb_report_lines(pdb,
+                                                 prot_d[pdb],
+                                                 s1_d[pdb])
 
-    with open(rpt_fp, "w") as fo:
-        fo.writelines(all_rpt)
+    return rpt_lines
 
+
+def save_report(report_lines:str,
+                pdb_fp:Union[Path, None]=None,
+                report_fp:Union[Path, None]=None):
+    """Write and save the ProtInfo report.
+    Args:
+      report_lines (str): The lines to write
+      pdb_fp (Union[Path, None], None): The pdb filepath if the
+        report is for a single pdb. Cannot be None if report_fp is.
+      report_fp (Union[Path, None], None): The filepath of the output
+        report if pdb_fp is None (pdb_fp has precedence).
+    """
+
+    if pdb_fp is None and report_fp is None:
+        raise ValueError("pdb_fp and report_fp cannot both be None.")
+    
+    if pdb_fp is not None:
+       # (re)set report_fp
+       report_fp = pdb_fp.parent.joinpath("ProtInfo.md")
+   
+    with open(report_fp, "w") as fo:
+        fo.writelines(report_lines)
+    
     return
 
 
-def main(args):
-
-    if isinstance(args, dict):
-        args = Namespace(**args)
-
-    pdb = check_pdb_arg(args.input_pdb)
-    if isinstance(pdb, str):
-        pdb = iou.maybe_download(args.input_pdb, args.fetch)
-    else:
-        if args.fetch:
-            raise TypeError(ERR_FETCH_EXISTING_FILE.format(pdb))
-
-    assert isinstance(pdb, Path)
+def collect_info(pdb:Path) -> Tuple[dict, Union[dict, None]]:
+    """Return at least one dict holding info from Bio.PDB.PDBParser.
+    The second dict is None when step1 cannot be run, otherwise
+    it contains info from the parsed run.log file.
+    """
 
     DO_STEP1 = USER_MCCE is not None
 
     # Info from Bio.Parser:
-    input_info_d = info_input_prot(pdb)
-
+    prot_d = info_input_prot(pdb)
+    pdbid = pdb.stem
     # if multimodels, no need to run step1:
-    if "MultiModels" in input_info_d[pdb.stem]["Input.ParsedStructure"]:
-        input_info_d[pdb.stem]["Input.Invalid"] = ERR_MULTI_MODELS.format(pdb.stem)
+    if "MultiModels" in prot_d[pdbid]["ParsedStructure"]:
+        prot_d[pdb.stem]["Invalid"] = ERR_MULTI_MODELS.format(pdbid)
         DO_STEP1 = False
-        s1_info_d = None
+        step1_d = None
 
     if DO_STEP1:
         #s1_start = time.time()
@@ -236,9 +286,28 @@ def main(args):
         #elapsed = time.time() - s1_start
         #print(f"step1 took {elapsed:,.2f} s ({elapsed/60:,.2f} min).")
         time.sleep(2)
-        s1_info_d = info_s1_log(pdb)
+        step1_d = info_s1_log(pdb)
 
-    rpt_fp = pdb.parent.joinpath("ProtInfo.md")
-    write_report(input_info_d, s1_info_d, rpt_fp)
+    return prot_d, step1_d
+
+
+def get_single_pdb_report(args:Union[Namespace, dict]):
+    """Get info and save report for a single pdb.
+    This function is called by the cli.
+    Expected keys in args: input_pdb [Path, str], fetch [bool].
+    Workflow:
+      1. validate_input
+      2. collect_info in dicts
+      3. collect_info_lines
+      4. save_report
+    """
+
+    if isinstance(args, dict):
+        args = Namespace(**args)
+
+    pdb = validate_input(args)
+    prot_d, step1_d = collect_info(pdb)
+    report_lines = collect_info_lines(prot_d, step1_d)
+    save_report(report_lines, pdb_fp=pdb)
 
     return

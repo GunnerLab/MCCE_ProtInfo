@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-"""
+__doc__ = """
 Command line interface for the MCCE ProtInfo tool, which gathers:
  * Info about the input protein from Bio.PDB parser
  * Info from MCCE step1 run.log & debug.log when step1 can be run
@@ -22,8 +22,8 @@ CLI_NAME = "ProtInfo"
 def pi_parser():
 
     p = ArgumentParser(
-            prog = f"{CLI_NAME} ",
-            description = __file__.__doc__,
+            prog = f"{CLI_NAME}",
+            description = __doc__,
             formatter_class = RawDescriptionHelpFormatter,
         )
     p.add_argument(
@@ -43,11 +43,11 @@ def pi_parser():
 
 
 def prot_info_cli(argv=None):
+    """Cli 'main' function: produces a single pdb report."""
 
     cli_parser = pi_parser()
-
     args = cli_parser.parse_args(argv)
-    info.main(args)
+    info.get_single_pdb_report(args)
 
     return
 
