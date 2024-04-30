@@ -9,10 +9,9 @@ from typing import Union
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-#...........................................
 
 
-def get_rcsb_pdb(pdbid:str) -> Union[None, Path]:
+def get_rcsb_pdb(pdbid: str) -> Union[None, Path]:
     """Given a pdb id, download the pdb file containing
     the biological assembly from rcsb.org.
     The file is downloaded with a pdb extension.
@@ -26,7 +25,7 @@ def get_rcsb_pdb(pdbid:str) -> Union[None, Path]:
     try:
         r = requests.get(url_rscb + bio_file, allow_redirects=True)
         r.raise_for_status()
-    except Exception as err:
+    except Exception:
         logger.exception(f"Error: Could not download {pdb_file}")
         sys.exit(1)
 
@@ -37,7 +36,7 @@ def get_rcsb_pdb(pdbid:str) -> Union[None, Path]:
     return Path(pdb_file).resolve()
 
 
-def get_pubchem_compound_link(compound_id:str) -> str:
+def get_pubchem_compound_link(compound_id: str) -> str:
     """Return the unvalidated link of the PubChem page for compund_id.
      subtance tab
     """

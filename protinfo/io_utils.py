@@ -14,21 +14,23 @@ from typing import Union
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
-#......................................................................
 
-def maybe_download(pdbid:str) -> Path:
+
+def maybe_download(pdbid: str) -> Path:
 
     pdb = qrs.get_rcsb_pdb(pdbid)
     if pdb is None:
         logger.error(f"Could not download {pdbid} from rcsb.org.")
-        #raise ValueError(f"Could not download {pdbid} from rcsb.org.")
-   
+
     return pdb
 
 
-def subprocess_run(cmd:str, capture_output=True, check:bool=False,
-                   text=True, shell=True) -> Union[subprocess.CompletedProcess,
-                                                   subprocess.CalledProcessError]:
+def subprocess_run(cmd: str,
+                   capture_output: bool = True,
+                   check: bool = False,
+                   text: bool = True,
+                   shell: bool = True) -> Union[subprocess.CompletedProcess,
+                                                subprocess.CalledProcessError]:
     """Wraps subprocess.run. Return CompletedProcess or err obj."""
 
     try:
@@ -37,24 +39,25 @@ def subprocess_run(cmd:str, capture_output=True, check:bool=False,
                               check=check,
                               text=text,
                               shell=shell
-                             )
+                              )
     except subprocess.CalledProcessError as e:
         data = e
 
     return data
 
 
-def make_executable(sh_path:str) -> None:
+def make_executable(sh_path: str) -> None:
     """Alternative to os.chmod(sh_path, stat.S_IXUSR): permission denied."""
 
     sh_path = Path(sh_path)
     cmd = f"chmod +x {str(sh_path)}"
 
-    p = subprocess_run(cmd,
+    try:
+        subprocess_run(cmd,
                        capture_output=False,
                        check=True)
-    if isinstance(p, subprocess.CalledProcessError):
-        logger.exception(f"Error in subprocess cmd 'chmod +x':\nException: {p}")
+    except subprocess.CalledProcessError:
+        logger.exception("Error in subprocess cmd 'chmod +x'")
         raise
 
     return

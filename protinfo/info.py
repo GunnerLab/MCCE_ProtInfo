@@ -29,7 +29,6 @@ import warnings
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
-#...........................................
 
 
 # error msg as fstrings:
@@ -50,7 +49,7 @@ def file_in_current_dir(fp: Path) -> bool:
     return fp.parent == Path.cwd()
 
 
-def check_pdb_arg(input_pdb:str) -> Union[Path, str]:
+def check_pdb_arg(input_pdb: str) -> Union[Path, str]:
     """Validate input_pdb str, which can be either a pdb id or a pdb file."""
 
     pdb = Path(input_pdb).resolve()
@@ -60,14 +59,13 @@ def check_pdb_arg(input_pdb:str) -> Union[Path, str]:
         if not pdb.suffix:
             return input_pdb
 
-        #raise FileNotFoundError(f"Not found: {pdb}")
         logger.error(f"Not found: {pdb}")
         sys.exit(1)
-    
+
     if not file_in_current_dir(pdb):
         logger.error(ERR_CALL_NOT_IN_FILE_DIR)
         sys.exit(1)
-    
+
     if pdb.suffix != ".pdb":
         logger.error(f"Not a valid extension: {pdb.suffix}")
         sys.exit(1)
@@ -75,9 +73,9 @@ def check_pdb_arg(input_pdb:str) -> Union[Path, str]:
     return pdb
 
 
-def validate_input(args:Namespace) -> Path:
+def validate_input(args: Namespace) -> Path:
     """Validate args.pdb and args.fetch """
-    
+
     pdb = check_pdb_arg(args.pdb)
     if isinstance(pdb, str):
         if not args.fetch:
@@ -89,14 +87,14 @@ def validate_input(args:Namespace) -> Path:
         if args.fetch:
             logger.error(ERR_FETCH_EXISTING_FILE.format(pdb))
             sys.exit(1)
-    
+
     return pdb
 
 
-def process_warnings(w:PDBConstructionWarning) -> dict:
+def process_warnings(w: PDBConstructionWarning) -> dict:
     """Function to collapse warnings into categories."""
 
-    warn_d = defaultdict(list) # output dict
+    warn_d = defaultdict(list)    # output dict
     chn_d = defaultdict(list)
     unrec_l = []
     neg_l = []
@@ -105,19 +103,20 @@ def process_warnings(w:PDBConstructionWarning) -> dict:
     # Unpack the warnings list
     for i, info in enumerate(w):
         # extract str past "WARNING: ":
-        line = info.message.args[0].removeprefix("WARNING: ") #[9:]
+        line = info.message.args[0].removeprefix("WARNING: ")
 
         if line.startswith("Chain"):
             newl = line[:-1].replace(' is discontinuous at ', '').split('line')
             chn_d[newl[0]].append("Line"+newl[1])
         elif line.startswith("Ignoring"):
             newl = line.removeprefix("Ignoring unrecognized ").split('at')
-            unrec_l.append((newl[0].strip().capitalize(), newl[1].strip().capitalize()))
+            unrec_l.append((newl[0].strip().capitalize(),
+                            newl[1].strip().capitalize()))
         elif line.startswith("Negative"):
             neg_l.append(line)
         elif line.startswith("Some atoms"):
             miss_l.append(line)
-    
+
     if chn_d:
         warn_d["Discontinuity"] = dict(chn_d)
     if unrec_l:
@@ -126,11 +125,11 @@ def process_warnings(w:PDBConstructionWarning) -> dict:
         warn_d["Negative occupancy"] = neg_l
     if miss_l:
         warn_d["Missing"] = miss_l
-        
+
     return dict(warn_d)
 
 
-def info_input_prot(pdb:Path) -> dict:
+def info_input_prot(pdb: Path) -> dict:
     """Return information about 'pdb' from Bio.PDB.PDBParser.
     The output dict structure follow the Bio.PDB.PDBParser
     structural hierarchy: Model, Chains, Residues, Atoms, along with
@@ -147,13 +146,13 @@ def info_input_prot(pdb:Path) -> dict:
     try:
         with warnings.catch_warnings(record=True, append=True) as w:
             warnings.simplefilter("always", category=PDBConstructionWarning)
-            
+
             structure = parser.get_structure(pdbid, pdb.name)
 
     except Exception as ex:
         dout[pdbid]["ParsedStructure"]['ERROR'] = ex.args
         return dict(dout)
-    
+
     n_models = len(structure)
     if n_models > 1:
         dinner["MultiModels"].append(n_models)
@@ -203,7 +202,8 @@ def info_input_prot(pdb:Path) -> dict:
     return dict(dout)
 
 
-def get_pdb_report_lines(pdbid:str, prot_d:dict, s1_d:Union[dict, None]) -> str:
+def get_pdb_report_lines(pdbid: str,
+                         prot_d: dict, s1_d: Union[dict, None]) -> str:
     """Return the report lines for a pdbid for the two subsections in a
     pdb report with PDBParser info in prot_d and Step1 info in s1_d).
     Note:
@@ -219,7 +219,7 @@ def get_pdb_report_lines(pdbid:str, prot_d:dict, s1_d:Union[dict, None]) -> str:
 
     report = f"---\n# {pdbid}\n"
     for i, subd in enumerate(dict_lst):
-        k0 = list(subd.keys())[0] # section hdrs: bioparser or mcce step1
+        k0 = list(subd.keys())[0]    # section hdrs: bioparser or mcce
 
         report = report + f"## {k0}\n"
 
@@ -254,22 +254,22 @@ def get_pdb_report_lines(pdbid:str, prot_d:dict, s1_d:Union[dict, None]) -> str:
     return report
 
 
-def collect_info_lines(prot_d:dict,
-                       s1_d:Union[dict, None]) -> str:
+def collect_info_lines(prot_d: dict,
+                       s1_d: Union[dict, None]) -> str:
     """Transform the info in each dict into printable lines."""
 
     rpt_lines = ""
     for pdb in prot_d:
         rpt_lines = rpt_lines + get_pdb_report_lines(pdb,
-                                                 prot_d[pdb],
-                                                 s1_d[pdb])
+                                                     prot_d[pdb],
+                                                     s1_d[pdb])
 
     return rpt_lines
 
 
-def save_report(report_lines:str,
-                pdb_fp:Union[Path, None]=None,
-                report_fp:Union[Path, None]=None):
+def save_report(report_lines: str,
+                pdb_fp: Union[Path, None] = None,
+                report_fp: Union[Path, None] = None):
     """Write and save the ProtInfo report.
     Args:
       report_lines (str): The lines to write
@@ -282,18 +282,18 @@ def save_report(report_lines:str,
     if pdb_fp is None and report_fp is None:
         logger.error("pdb_fp and report_fp cannot both be None.")
         sys.exit(1)
-    
+
     if pdb_fp is not None:
-       # (re)set report_fp
-       report_fp = pdb_fp.parent.joinpath("ProtInfo.md")
-   
+        # (re)set report_fp
+        report_fp = pdb_fp.parent.joinpath("ProtInfo.md")
+
     with open(report_fp, "w") as fo:
         fo.writelines(report_lines)
-    
+
     return
 
 
-def collect_info(pdb:Path) -> Tuple[dict, Union[dict, None]]:
+def collect_info(pdb: Path) -> Tuple[dict, Union[dict, None]]:
     """Return at least one dict holding info from Bio.PDB.PDBParser.
     The second dict is None when step1 cannot be run, otherwise
     it contains info from the parsed run.log file.
@@ -311,17 +311,17 @@ def collect_info(pdb:Path) -> Tuple[dict, Union[dict, None]]:
         step1_d = None
 
     if DO_STEP1:
-        #s1_start = time.time()
+        # s1_start = time.time()
         run.do_step1(pdb)
-        #elapsed = time.time() - s1_start
-        #print(f"step1 took {elapsed:,.2f} s ({elapsed/60:,.2f} min).")
+        # elapsed = time.time() - s1_start
+        # print(f"step1 took {elapsed:,.2f} s ({elapsed/60:,.2f} min).")
         time.sleep(2)
         step1_d = info_s1_log(pdb)
 
     return prot_d, step1_d
 
 
-def get_single_pdb_report(args:Union[Namespace, dict]):
+def get_single_pdb_report(args: Union[Namespace, dict]):
     """Get info and save report for a single pdb.
     This function is called by the cli.
     Expected keys in args: pdb [Path, str], fetch [bool].

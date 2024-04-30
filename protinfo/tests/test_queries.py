@@ -3,34 +3,41 @@
 from protinfo.queries import get_rcsb_pdb
 import os
 from pathlib import Path
+import shutil
+import requests
 import pytest
-import tempfile
 
 
-def test_create_file(tmp_path):
-    d = tmp_path / "sub"
-    d.mkdir()
-    p = d / "hello.txt"
-    p.write_text(CONTENT)
-    assert p.read_text() == CONTENT
-    assert len(list(tmp_path.iterdir())) == 1
-    assert 0
-
-
+tmp_dir = Path.cwd().joinpath("tmp_pinfo")
 
 class TestGetRcsbPdb:
+    tmp_path = tmp_dir
 
-    def __init__(self, tmp_path):
-        self.tmp_path = tmp_path
-        self.here = Path.cwd()
-        
+    @classmethod
+    def setup_class(cls):
+        """setup any state specific to the execution of the given class"""
+        if not cls.tmp_path.exists():
+            cls.tmp_path.mkdir()
+        cls.here = Path.cwd()
+
+    @classmethod
+    def teardown_class(cls):
+        """teardown any state that was previously setup with a call to
+        setup_class.
+        """
+        for dp in cls.tmp_path.iterdir():
+            shutil.rmtree(dp)
+        cls.tmp_path.rmdir()
+
     def test_valid_pdbid(self):
         """Given a valid pdbid, the function should download the pdb
         file containing the biological assembly from rcsb.org and
         return a Path object."""
 
-        pdbid = "1abc"
+        pdbid = "4lzt"
         d = self.tmp_path/pdbid
+        if not d.is_dir():
+            d.mkdir()
         os.chdir(d)
         result = get_rcsb_pdb(pdbid)
         os.chdir(self.here)
@@ -42,8 +49,14 @@ class TestGetRcsbPdb:
 
         pdbid = "xyz"
         d = self.tmp_path/pdbid
+        if not d.is_dir():
+            d.mkdir()
         os.chdir(d)
-        result = get_rcsb_pdb(pdbid)
+
+        result = None
+        with pytest.raises(SystemExit):
+            with pytest.raises(requests.exceptions.HTTPError):  
+                  result = get_rcsb_pdb(pdbid)
         os.chdir(self.here)
 
         assert result is None
@@ -53,12 +66,15 @@ class TestGetRcsbPdb:
         the function should overwrite the existing file with the new download.
         """
 
-        pdbid = "1abc"
+        pdbid = "1ans"
         d = self.tmp_path/pdbid
-        os.chdir(d)
-        existing_file = Path("1abc.pdb").resolve()
+        if not d.is_dir():
+            d.mkdir()
+        
+        existing_file = d.joinpath(f"{pdbid}.pdb") #.resolve()
         existing_file.touch()
 
+        os.chdir(d)
         result = get_rcsb_pdb(pdbid)
         os.chdir(self.here)
 

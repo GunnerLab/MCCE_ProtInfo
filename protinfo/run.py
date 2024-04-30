@@ -24,7 +24,7 @@ def get_s1_dir(pdb_fp: Path) -> Path:
     return pdb_fp.parent.joinpath("step1_run").resolve()
 
 
-def write_script(dest_dirpath:Path):
+def write_script(dest_dirpath: Path):
     """Write an excecutable bash script to run mcce step1."""
 
     sh_path = dest_dirpath.joinpath("s1.sh")
@@ -37,8 +37,8 @@ def write_script(dest_dirpath:Path):
     return
 
 
-def prep_script(s1_dir:Path):
-    
+def prep_script(s1_dir: Path):
+
     if s1_dir.exists():
         shutil.rmtree(s1_dir)
     s1_dir.mkdir()
@@ -52,11 +52,11 @@ def run_step1(s1_dir: Path) -> None:
     """Run step1 in s1_dir."""
 
     subprocess.Popen(f"{s1_dir}/s1.sh",
-                     cwd = str(s1_dir),
+                     cwd=str(s1_dir),
                      close_fds=True,
                      stdout=open(f"{s1_dir}/run.log", "w")
                      )
-    
+
     return
 
 

@@ -16,21 +16,22 @@ from protinfo import queries as qrs
 from typing import Union
 
 
-def extract_content_between_tags(text:str, tag1:str, tag2:str="   Done"):
-  """Extracts the content between two string tags in a text.
-  Args:
-    text: A text.
-    tag1: The first tag.
-    tag2: The second tag, default: "   Done".
+def extract_content_between_tags(text: str,
+                                 tag1: str, tag2: str = "   Done") -> str:
+    """Extracts the content between two string tags in a text.
+    Args:
+      text: A text.
+      tag1: The first tag.
+      tag2: The second tag, default: "   Done".
 
-  Returns:
-    A string containing the content between the two headers.
-  """
+    Returns:
+      A string containing the content between the two headers.
+    """
 
-  start_pos = text.find(tag1) + len(tag1)
-  end_pos = text.find(tag2, start_pos)
+    start_pos = text.find(tag1) + len(tag1)
+    end_pos = text.find(tag2, start_pos)
 
-  return text[start_pos:end_pos]
+    return text[start_pos:end_pos]
 
 
 @dataclass
@@ -59,7 +60,7 @@ class LogHdr:
     skip_lines: Union[None, list, tuple] = None
     debuglog: bool = False
 
-    def has_debuglog(self, line:str, calling_key:int=5) -> bool:
+    def has_debuglog(self, line: str, calling_key: int = 5) -> bool:
         """Set debuglog proprerty to True if line ends with
         'saved in debug.log.'
         calling_key is meant to be the index key of the calling dict.
@@ -89,7 +90,7 @@ runlog1_headers = [
     ]
 
 
-def get_log1_specs(loghdrs:list) -> dict:
+def get_log1_specs(loghdrs: list) -> dict:
     """Return a dict of LogHdr classes for processing step1 sections
     in run.log.
     """
@@ -108,11 +109,11 @@ def get_log1_specs(loghdrs:list) -> dict:
                             )
         elif i == 3:
             b3_exclude = (
-                '   Creating temporary parameter file for unrecognized residue...',
-                '   Trying labeling again...',
-                '   Try delete this entry and run MCCE again',
-                '   Error! premcce_confname()',
-                ' is already loaded somewhere else.',
+                "   Creating temporary parameter file for unrecognized residue...",
+                "   Trying labeling again...",
+                "   Try delete this entry and run MCCE again",
+                "   Error! premcce_confname()",
+                " is already loaded somewhere else.",
             )
             all[i] = LogHdr(i, hdr,
                             rpt_hdr="Labeling:",
@@ -129,13 +130,13 @@ def get_log1_specs(loghdrs:list) -> dict:
                             rpt_hdr="Free Cofactors:",
                             skip_lines=("free cofactors were stripped off in this round",
                                         "saved in debug.log.")
-                           )
+                            )
         elif i == 6:
             all[i] = LogHdr(i, hdr,
                             rpt_hdr="Missing Heavy Atoms:",
                             line_start="   Missing heavy atom  ",
                             skip_lines=['   Missing heavy atoms detected.']
-                           )
+                            )
         elif i == 7:
             all[i] = LogHdr(i, hdr,
                             rpt_hdr="Distance Clashes:",
@@ -161,13 +162,12 @@ class RunLog1:
     process each one of them into a simplified output.
     """
 
-    def __init__(self, pdb:Path) -> None:
+    def __init__(self, pdb: Path) -> None:
         self.pdb = pdb
         self.pdbid = self.pdb.stem
         self.s1_dir = self.pdb.parent.joinpath("step1_run")
         self.check_debuglog_idx = [5]
         self.txt_blocks = self.get_blocks()
-
 
     def get_debuglog_species(self) -> str:
 
@@ -175,13 +175,12 @@ class RunLog1:
         df = pd.read_csv(fp, sep=r"\s+", header=None, engine="python")
         txt = "Species and properties with assigned default values in debug.log:\n"
         for k in df[1].unique():
-            txt = txt + f"{k}: {list(df[df[1]==k][0].unique())}\n"
+            txt = txt + f"{k}: {list(df[df[1] == k][0].unique())}\n"
 
         return txt
 
-
     @staticmethod
-    def process_content_block(content:list, lhdr:LogHdr) -> list:
+    def process_content_block(content: list, lhdr: LogHdr) -> list:
 
         out = []
         skip = lhdr.skip_lines is not None
@@ -237,7 +236,7 @@ class RunLog1:
 
         # check if new tpl confs:
         if lhdr.idx == 3 and newtpl:
-            out.append(f"Generic topology file created for:")
+            out.append("Generic topology file created for:")
             for t in newtpl:
                 out.append(t)
 
@@ -287,11 +286,11 @@ class RunLog1:
                 new7.append(f"  - {d}")
             new7.append("</details>")
             block_txt["Distance Clashes:"] = new7
-        
+
         return block_txt
 
 
-def filter_heavy_atm_section(pdb:Path, s1_info_d:dict) -> dict:
+def filter_heavy_atm_section(pdb: Path, s1_info_d: dict) -> dict:
     """Process the 'Missing Heavy Atoms:' section to remove
     lines for missing backbone atoms of terminal residues.
     """
@@ -299,7 +298,7 @@ def filter_heavy_atm_section(pdb:Path, s1_info_d:dict) -> dict:
     # term values: [2-tuples]
     term = s1_info_d[pdb.stem]["MCCE.Step1"]["Termini:"]
     heavy = s1_info_d[pdb.stem]["MCCE.Step1"]["Missing Heavy Atoms:"]
-    last_line = heavy.pop(-1)
+    _ = heavy.pop(-1)
     # =Ignore warning messages if they are in the terminal residues
 
     hvy_lst = []
@@ -314,11 +313,12 @@ def filter_heavy_atm_section(pdb:Path, s1_info_d:dict) -> dict:
 
     return s1_info_d
 
-def info_s1_log(pdb:Path) -> dict:
+
+def info_s1_log(pdb: Path) -> dict:
     dout = {}
     silog = RunLog1(pdb)
     # set the section data with dict:
     dout[pdb.stem] = {"MCCE.Step1": silog.txt_blocks}
-    dout = filter_heavy_atm_section(pdb, dout) 
+    dout = filter_heavy_atm_section(pdb, dout)
 
     return dout

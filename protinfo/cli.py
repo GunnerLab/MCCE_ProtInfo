@@ -12,30 +12,32 @@ Options:
 """
 
 
-from argparse import ArgumentParser, RawDescriptionHelpFormatter, Namespace
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from protinfo import info
 import sys
 
 
 CLI_NAME = "ProtInfo"
 
+
 def pi_parser():
 
     p = ArgumentParser(
-            prog = f"{CLI_NAME}",
-            description = __doc__,
-            formatter_class = RawDescriptionHelpFormatter,
+            prog=f"{CLI_NAME}",
+            description=__doc__,
+            formatter_class=RawDescriptionHelpFormatter,
         )
     p.add_argument(
         "pdb",
-        type = str,
-        help = "A pdb file name (in the current directory) or a pdbid (assumed valid)."
+        type=str,
+        help="""A pdb file name (in the current directory) or
+        a pdbid (assumed valid)."""
     )
     p.add_argument(
         "--fetch",
-        default = False,
-        action = "store_true",
-        help = "Download the biological assembly of given pdb (if not a file)."
+        default=False,
+        action="store_true",
+        help="Download the biological assembly of given pdb (if not a file)."
     )
 
     return p
