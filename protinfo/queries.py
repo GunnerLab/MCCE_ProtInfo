@@ -1,9 +1,15 @@
 #!/usr/bin/env python
 
-import json
+import logging
 from pathlib import Path
 import requests
+import sys
 from typing import Union
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+#...........................................
 
 
 def get_rcsb_pdb(pdbid:str) -> Union[None, Path]:
@@ -21,12 +27,12 @@ def get_rcsb_pdb(pdbid:str) -> Union[None, Path]:
         r = requests.get(url_rscb + bio_file, allow_redirects=True)
         r.raise_for_status()
     except Exception as err:
-        print(f"Error: Could not download {pdb_file}:\n{err}")
-        return None
+        logger.exception(f"Error: Could not download {pdb_file}")
+        sys.exit(1)
 
     with open(pdb_file, 'wb') as fo:
         fo.write(r.content)
-    print('Download completed.')
+    logger.info('Download completed.')
 
     return Path(pdb_file).resolve()
 

@@ -16,49 +16,79 @@ from argparse import Namespace
 import Bio.PDB
 from Bio.PDB.PDBExceptions import PDBConstructionWarning
 from collections import Counter, defaultdict
+import logging
 from pathlib import Path
 from protinfo import USER_MCCE
-from protinfo.log_parser import info_s1_log, blocks_specs
+from protinfo.log_parser import info_s1_log
 from protinfo import io_utils as iou, run
+import sys
 import time
 from typing import Tuple, Union
 import warnings
 
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
+#...........................................
+
+
 # error msg as fstrings:
 ERR_MULTI_MODELS = "MCCE cannot handle multi-model proteins such as {}."
 ERR_FETCH_EXISTING_FILE = """
-The input_pdb parameter ({}) resolves to an existing file: to OVERWRITE it
+The input pdb parameter ({}) resolves to an existing file: to OVERWRITE it
 with the biological assembly from a fresh download, remove the extension.
 """
+ERR_CALL_NOT_IN_FILE_DIR = """Call ProtInfo from where the pdb resides."""
+ERR_MISSING_FETCH_FLAG = """
+The input pdb parameter ({}) seems to be a pdbid. To download
+its biological assembly, add --fetch at the command line."""
+
+
+def file_in_current_dir(fp: Path) -> bool:
+    """Return whether the fiven file path is in the current directory."""
+
+    return fp.parent == Path.cwd()
 
 
 def check_pdb_arg(input_pdb:str) -> Union[Path, str]:
     """Validate input_pdb str, which can be either a pdb id or a pdb file."""
 
     pdb = Path(input_pdb).resolve()
+
     if not pdb.exists():
         # if no extension, assume pdbid:
         if not pdb.suffix:
             return input_pdb
 
-        raise FileNotFoundError(f"Not found: {pdb}")
-
+        #raise FileNotFoundError(f"Not found: {pdb}")
+        logger.error(f"Not found: {pdb}")
+        sys.exit(1)
+    
+    if not file_in_current_dir(pdb):
+        logger.error(ERR_CALL_NOT_IN_FILE_DIR)
+        sys.exit(1)
+    
     if pdb.suffix != ".pdb":
-        raise TypeError(f"Not a valid extension: {pdb.suffix}")
+        logger.error(f"Not a valid extension: {pdb.suffix}")
+        sys.exit(1)
 
     return pdb
 
 
 def validate_input(args:Namespace) -> Path:
-    """Validate args.input_pdb and args.fetch """
+    """Validate args.pdb and args.fetch """
     
-    pdb = check_pdb_arg(args.input_pdb)
+    pdb = check_pdb_arg(args.pdb)
     if isinstance(pdb, str):
-        pdb = iou.maybe_download(args.input_pdb, args.fetch)
+        if not args.fetch:
+            logger.error(ERR_MISSING_FETCH_FLAG.format(pdb))
+            sys.exit(1)
+
+        pdb = iou.maybe_download(args.pdb)
     else:
         if args.fetch:
-            raise TypeError(ERR_FETCH_EXISTING_FILE.format(pdb))
+            logger.error(ERR_FETCH_EXISTING_FILE.format(pdb))
+            sys.exit(1)
     
     return pdb
 
@@ -101,7 +131,7 @@ def process_warnings(w:PDBConstructionWarning) -> dict:
 
 
 def info_input_prot(pdb:Path) -> dict:
-    """Return information about input_pdb from Bio.PDB.PDBParser.
+    """Return information about 'pdb' from Bio.PDB.PDBParser.
     The output dict structure follow the Bio.PDB.PDBParser
     structural hierarchy: Model, Chains, Residues, Atoms, along with
     a warnings section if any.
@@ -121,7 +151,6 @@ def info_input_prot(pdb:Path) -> dict:
             structure = parser.get_structure(pdbid, pdb.name)
 
     except Exception as ex:
-        #raise ValueError(f"Could not parse {pdb.name}:\n{ex}")
         dout[pdbid]["ParsedStructure"]['ERROR'] = ex.args
         return dict(dout)
     
@@ -251,7 +280,8 @@ def save_report(report_lines:str,
     """
 
     if pdb_fp is None and report_fp is None:
-        raise ValueError("pdb_fp and report_fp cannot both be None.")
+        logger.error("pdb_fp and report_fp cannot both be None.")
+        sys.exit(1)
     
     if pdb_fp is not None:
        # (re)set report_fp
@@ -294,7 +324,7 @@ def collect_info(pdb:Path) -> Tuple[dict, Union[dict, None]]:
 def get_single_pdb_report(args:Union[Namespace, dict]):
     """Get info and save report for a single pdb.
     This function is called by the cli.
-    Expected keys in args: input_pdb [Path, str], fetch [bool].
+    Expected keys in args: pdb [Path, str], fetch [bool].
     Workflow:
       1. validate_input
       2. collect_info in dicts

@@ -9,7 +9,6 @@ import protinfo.io_utils as iou
 from pathlib import Path
 import shutil
 import subprocess
-from typing import Union
 
 
 S1_SH = """#!/bin/bash
