@@ -74,7 +74,7 @@ def check_pdb_arg(input_pdb: str) -> Union[Path, str]:
 
 
 def validate_input(args: Namespace) -> Path:
-    """Validate args.pdb and args.fetch """
+    """Validate args.pdb and args.fetch"""
 
     pdb = check_pdb_arg(args.pdb)
     if isinstance(pdb, str):
@@ -94,7 +94,7 @@ def validate_input(args: Namespace) -> Path:
 def process_warnings(w: PDBConstructionWarning) -> dict:
     """Function to collapse warnings into categories."""
 
-    warn_d = defaultdict(list)    # output dict
+    warn_d = defaultdict(list)  # output dict
     chn_d = defaultdict(list)
     unrec_l = []
     neg_l = []
@@ -106,12 +106,11 @@ def process_warnings(w: PDBConstructionWarning) -> dict:
         line = info.message.args[0].removeprefix("WARNING: ")
 
         if line.startswith("Chain"):
-            newl = line[:-1].replace(' is discontinuous at ', '').split('line')
-            chn_d[newl[0]].append("Line"+newl[1])
+            newl = line[:-1].replace(" is discontinuous at ", "").split("line")
+            chn_d[newl[0]].append("Line" + newl[1])
         elif line.startswith("Ignoring"):
-            newl = line.removeprefix("Ignoring unrecognized ").split('at')
-            unrec_l.append((newl[0].strip().capitalize(),
-                            newl[1].strip().capitalize()))
+            newl = line.removeprefix("Ignoring unrecognized ").split("at")
+            unrec_l.append((newl[0].strip().capitalize(), newl[1].strip().capitalize()))
         elif line.startswith("Negative"):
             neg_l.append(line)
         elif line.startswith("Some atoms"):
@@ -150,7 +149,7 @@ def info_input_prot(pdb: Path) -> dict:
             structure = parser.get_structure(pdbid, pdb.name)
 
     except Exception as ex:
-        dout[pdbid]["ParsedStructure"]['ERROR'] = ex.args
+        dout[pdbid]["ParsedStructure"]["ERROR"] = ex.args
         return dict(dout)
 
     n_models = len(structure)
@@ -202,8 +201,7 @@ def info_input_prot(pdb: Path) -> dict:
     return dict(dout)
 
 
-def get_pdb_report_lines(pdbid: str,
-                         prot_d: dict, s1_d: Union[dict, None]) -> str:
+def get_pdb_report_lines(pdbid: str, prot_d: dict, s1_d: Union[dict, None]) -> str:
     """Return the report lines for a pdbid for the two subsections in a
     pdb report with PDBParser info in prot_d and Step1 info in s1_d).
     Note:
@@ -219,7 +217,7 @@ def get_pdb_report_lines(pdbid: str,
 
     report = f"---\n# {pdbid}\n"
     for i, subd in enumerate(dict_lst):
-        k0 = list(subd.keys())[0]    # section hdrs: bioparser or mcce
+        k0 = list(subd.keys())[0]  # section hdrs: bioparser or mcce
 
         report = report + f"## {k0}\n"
 
@@ -230,20 +228,28 @@ def get_pdb_report_lines(pdbid: str,
             report = report + f"### {k}\n"
             for val in subd[k0][k]:
                 if i == 0 and k == "Warnings":
-                    report = report + f"  - <strong><font color='red'>{val}</font> </strong>\n"
+                    report = (
+                        report
+                        + f"  - <strong><font color='red'>{val}</font> </strong>\n"
+                    )
                     d = subd[k0][k][val]
                     for w in d:
                         report = report + f"    - {w}: {d[w]}\n"
 
                 elif i == 1 and isinstance(val, str) and val.startswith("Generic"):
-                    report = report + f"  - <strong><font color='red'>{val}</font> </strong>\n"
+                    report = (
+                        report
+                        + f"  - <strong><font color='red'>{val}</font> </strong>\n"
+                    )
 
                 elif i == 1 and k == "Distance Clashes:":
                     report = report + f"{val}\n"
 
-                elif (isinstance(val, tuple) or isinstance(val, list)):
+                elif isinstance(val, tuple) or isinstance(val, list):
                     ter, lst = val
-                    report = report + f"  * <strong>{ter} </strong> : {', '.join(lst)}\n"
+                    report = (
+                        report + f"  * <strong>{ter} </strong> : {', '.join(lst)}\n"
+                    )
                 else:
                     report = report + f"  - {val}\n"
 
@@ -254,22 +260,21 @@ def get_pdb_report_lines(pdbid: str,
     return report
 
 
-def collect_info_lines(prot_d: dict,
-                       s1_d: Union[dict, None]) -> str:
+def collect_info_lines(prot_d: dict, s1_d: Union[dict, None]) -> str:
     """Transform the info in each dict into printable lines."""
 
     rpt_lines = ""
     for pdb in prot_d:
-        rpt_lines = rpt_lines + get_pdb_report_lines(pdb,
-                                                     prot_d[pdb],
-                                                     s1_d[pdb])
+        rpt_lines = rpt_lines + get_pdb_report_lines(pdb, prot_d[pdb], s1_d[pdb])
 
     return rpt_lines
 
 
-def save_report(report_lines: str,
-                pdb_fp: Union[Path, None] = None,
-                report_fp: Union[Path, None] = None):
+def save_report(
+    report_lines: str,
+    pdb_fp: Union[Path, None] = None,
+    report_fp: Union[Path, None] = None,
+):
     """Write and save the ProtInfo report.
     Args:
       report_lines (str): The lines to write
@@ -300,6 +305,7 @@ def collect_info(pdb: Path) -> Tuple[dict, Union[dict, None]]:
     """
 
     DO_STEP1 = USER_MCCE is not None
+    step1_d = None
 
     # Info from Bio.Parser:
     prot_d = info_input_prot(pdb)
@@ -308,7 +314,6 @@ def collect_info(pdb: Path) -> Tuple[dict, Union[dict, None]]:
     if "MultiModels" in prot_d[pdbid]["ParsedStructure"]:
         prot_d[pdb.stem]["Invalid"] = ERR_MULTI_MODELS.format(pdbid)
         DO_STEP1 = False
-        step1_d = None
 
     if DO_STEP1:
         # s1_start = time.time()
