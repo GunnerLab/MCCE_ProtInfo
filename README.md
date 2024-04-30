@@ -43,14 +43,14 @@ After running MCCE's step1.py, the run.log provides information about errors and
 
 Info recorded in the final report:
   * Terminal residues
-  * Waters and TODO: their solvent-accessible surface area (SASA)
+  * Waters and __TODO__: their solvent-accessible surface area (SASA)
   * Cofactors:
-    - HETATM id, name and TODO: SASA
+    - HETATM id, name and __TODO__: SASA
     - Missing topology
-  * TODO: Which repairs were applied
+  * __TODO__: Which repairs were applied
   * Fatal errors
 
-## TODO: MCCE Recommendations:
+## __TODO__: MCCE Recommendations:
 This section will list whatever MCCE can recommend.
 
 ---
