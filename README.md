@@ -1,8 +1,30 @@
 # MCCE_ProtInfo
 This tool provides information about a protein pdb file on its structure, along with applied transformations and issues flagged in the run.log produced by MCCE's step1.py.  
-This information is saved into a file named `ProtInfo`.[txt, md, toml :: TBD]
+This information is saved into a file named `ProtInfo.md`.
 
   * See sample markdown report for [1FAT](#Sample)
+
+## USAGE:
+```
+usage: ProtInfo [-h] pdb [--fetch]
+
+Command line interface for the MCCE ProtInfo tool, which gathers:
+ * Info about the input protein from Bio.PDB parser
+ * Info from MCCE step1 run.log & debug.log when step1 can be run
+
+Options:
+ 1. pdb (required): a pdb file name or pdbid (assumed valid)
+ 2. --fetch (False if not used): If 'pdb' is a pdbid and flag is used,
+    the biological assembly is downloaded from rcsb.org.
+
+positional arguments:
+  pdb         A pdb file name (in the current directory) or a pdbid (assumed valid).
+
+options:
+  -h, --help  show this help message and exit
+  --fetch     Download the biological assembly of given pdb (if not a file).
+
+```
 
 ## Basic Info:
 Info recorded in the final report:
@@ -11,7 +33,8 @@ Info recorded in the final report:
   * Breaks in chains
   * Number of residues
   * Unknown residues
-  * Residues with alternate locations: MCCE can only handle single location
+  * Residues with multiple alternate locations:
+    - MCCE can only handle a single location and only considers the 'A' location (which may cause problems)
   * Number of water molecules
   * Number and identity of cofactors
 
@@ -20,14 +43,14 @@ After running MCCE's step1.py, the run.log provides information about errors and
 
 Info recorded in the final report:
   * Terminal residues
-  * Waters and their solvent-accessible surface area (SASA)
+  * Waters and TODO: their solvent-accessible surface area (SASA)
   * Cofactors:
-    - HETATM id, name and, SASA
+    - HETATM id, name and TODO: SASA
     - Missing topology
-  * Which repairs were applied
+  * TODO: Which repairs were applied
   * Fatal errors
 
-## TODO MCCE Recommendations:
+## TODO: MCCE Recommendations:
 This section will list whatever MCCE can recommend.
 
 ---
