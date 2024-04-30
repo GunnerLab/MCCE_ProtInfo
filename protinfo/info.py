@@ -265,7 +265,10 @@ def collect_info_lines(prot_d: dict, s1_d: Union[dict, None]) -> str:
 
     rpt_lines = ""
     for pdb in prot_d:
-        rpt_lines = rpt_lines + get_pdb_report_lines(pdb, prot_d[pdb], s1_d[pdb])
+        if s1_d is not None:
+            rpt_lines = rpt_lines + get_pdb_report_lines(pdb, prot_d[pdb], s1_d[pdb])
+        else:
+            rpt_lines = rpt_lines + get_pdb_report_lines(pdb, prot_d[pdb], s1_d)
 
     return rpt_lines
 
