@@ -243,7 +243,7 @@ def get_pdb_report_lines(pdbid:str, prot_d:dict, s1_d:Union[dict, None]) -> str:
 
                 elif (isinstance(val, tuple) or isinstance(val, list)):
                     ter, lst = val
-                    report = report + f"  * <strong>{ter} </strong> : {", ".join(lst)}\n"
+                    report = report + f"  * <strong>{ter} </strong> : {', '.join(lst)}\n"
                 else:
                     report = report + f"  - {val}\n"
 
