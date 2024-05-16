@@ -13,31 +13,33 @@ Options:
 
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
+import logging
 from protinfo import info
 import sys
 
 
 CLI_NAME = "ProtInfo"
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 def pi_parser():
-
     p = ArgumentParser(
-            prog=f"{CLI_NAME}",
-            description=__doc__,
-            formatter_class=RawDescriptionHelpFormatter,
-        )
+        prog=f"{CLI_NAME}",
+        description=__doc__,
+        formatter_class=RawDescriptionHelpFormatter,
+    )
     p.add_argument(
         "pdb",
         type=str,
         help="""A pdb file name (in the current directory) or
-        a pdbid (assumed valid)."""
+        a pdbid (assumed valid).""",
     )
     p.add_argument(
         "--fetch",
         default=False,
         action="store_true",
-        help="Download the biological assembly of given pdb (if not a file)."
+        help="Download the biological assembly of given pdb (if not a file).",
     )
 
     return p
@@ -54,5 +56,4 @@ def prot_info_cli(argv=None):
 
 
 if __name__ == "__main__":
-
     prot_info_cli(sys.argv)

@@ -18,9 +18,8 @@ from Bio.PDB.PDBExceptions import PDBConstructionWarning
 from collections import Counter, defaultdict
 import logging
 from pathlib import Path
-from protinfo import USER_MCCE
+from protinfo import USER_MCCE, io_utils as iou, run, queries as qrs
 from protinfo.log_parser import info_s1_log
-from protinfo import io_utils as iou, run
 import sys
 import time
 from typing import Tuple, Union
@@ -31,64 +30,21 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
-# error msg as fstrings:
-ERR_MULTI_MODELS = "MCCE cannot handle multi-model proteins such as {}."
+# error msg as fstring:
 ERR_FETCH_EXISTING_FILE = """
-The input pdb parameter ({}) resolves to an existing file: to OVERWRITE it
-with the biological assembly from a fresh download, remove the extension.
+The input pdb ({}) resolves to an existing file: to OVERWRITE it with
+the biological assembly from a fresh download, remove the extension
+OR do not pass the --fetch flag at the command line.
 """
-ERR_CALL_NOT_IN_FILE_DIR = """Call ProtInfo from where the pdb resides."""
+ERR_MULTI_MODELS = "MCCE cannot handle multi-model proteins."
+ERR_TRUNCATED_CONVERSION = """
+This pdb was truncated during the .cif to .pdb format conversion
+because the number of atoms exceeds 99,999."""
+ERR_CALL_NOT_IN_FILE_DIR = """
+Call ProtInfo from where the pdb resides."""
 ERR_MISSING_FETCH_FLAG = """
-The input pdb parameter ({}) seems to be a pdbid. To download
-its biological assembly, add --fetch at the command line."""
-
-
-def file_in_current_dir(fp: Path) -> bool:
-    """Return whether the fiven file path is in the current directory."""
-
-    return fp.parent == Path.cwd()
-
-
-def check_pdb_arg(input_pdb: str) -> Union[Path, str]:
-    """Validate input_pdb str, which can be either a pdb id or a pdb file."""
-
-    pdb = Path(input_pdb).resolve()
-
-    if not pdb.exists():
-        # if no extension, assume pdbid:
-        if not pdb.suffix:
-            return input_pdb
-
-        logger.error(f"Not found: {pdb}")
-        sys.exit(1)
-
-    if not file_in_current_dir(pdb):
-        logger.error(ERR_CALL_NOT_IN_FILE_DIR)
-        sys.exit(1)
-
-    if pdb.suffix != ".pdb":
-        logger.error(f"Not a valid extension: {pdb.suffix}")
-        sys.exit(1)
-
-    return pdb
-
-
-def validate_input(args: Namespace) -> Path:
-    """Validate args.pdb and args.fetch"""
-
-    pdb = check_pdb_arg(args.pdb)
-    if isinstance(pdb, str):
-        if not args.fetch:
-            logger.error(ERR_MISSING_FETCH_FLAG.format(pdb))
-            sys.exit(1)
-
-        pdb = iou.maybe_download(args.pdb)
-    else:
-        if args.fetch:
-            logger.error(ERR_FETCH_EXISTING_FILE.format(pdb))
-            sys.exit(1)
-
-    return pdb
+The input pdb ({}) seems to be a pdbid. To download its
+biological assembly, add --fetch at the command line."""
 
 
 def process_warnings(w: PDBConstructionWarning) -> dict:
@@ -151,6 +107,16 @@ def info_input_prot(pdb: Path) -> dict:
     except Exception as ex:
         dout[pdbid]["ParsedStructure"]["ERROR"] = ex.args
         return dict(dout)
+
+    pdb_hdr_d = Bio.PDB.parse_pdb_header(pdb)
+    protname = pdb_hdr_d.get("name")
+    if protname is not None:
+        dinner["Name"].append(protname.title())
+    # check if header has truncation warning:
+    note_hdr = pdb_hdr_d.get("head")
+    if note_hdr is not None:
+        if "truncated" in note_hdr and note_hdr.endswith("true"):
+            dinner["Truncation"].append(f"WARNING: {note_hdr}")
 
     n_models = len(structure)
     if n_models > 1:
@@ -315,7 +281,11 @@ def collect_info(pdb: Path) -> Tuple[dict, Union[dict, None]]:
     pdbid = pdb.stem
     # if multimodels, no need to run step1:
     if "MultiModels" in prot_d[pdbid]["ParsedStructure"]:
-        prot_d[pdb.stem]["Invalid"] = ERR_MULTI_MODELS.format(pdbid)
+        prot_d[pdb.stem]["Invalid"] = ERR_MULTI_MODELS
+        DO_STEP1 = False
+
+    if "Truncation" in prot_d[pdbid]["ParsedStructure"]:
+        prot_d[pdb.stem]["Failed conversion"] = ERR_TRUNCATED_CONVERSION
         DO_STEP1 = False
 
     if DO_STEP1:
@@ -327,6 +297,57 @@ def collect_info(pdb: Path) -> Tuple[dict, Union[dict, None]]:
         step1_d = info_s1_log(pdb)
 
     return prot_d, step1_d
+
+
+def file_in_current_dir(fp: Path) -> bool:
+    """Return whether the fiven file path is in the current directory."""
+
+    return fp.parent == Path.cwd()
+
+
+def check_pdb_arg(input_pdb: str) -> Union[Path, str, Tuple[None, str]]:
+    """Validate input_pdb str, which can be either a pdb id or a pdb file."""
+
+    pdb = Path(input_pdb).resolve()
+
+    if not pdb.exists():
+        # if no extension, assume pdbid:
+        if not pdb.suffix:
+            s = len(pdb.stem)
+            if s != 4:
+                return None, f"Invalid pdbid length: {s}; 4 expected."
+
+            return input_pdb
+
+        return None, f"File not found: {pdb}"
+
+    if not file_in_current_dir(pdb):
+        return None, ERR_CALL_NOT_IN_FILE_DIR
+
+    if pdb.suffix != ".pdb":
+        return None, f"Not a valid extension: {pdb.suffix}"
+
+    return pdb
+
+
+def validate_pdb_inputs(args: Namespace) -> Union[Path, str, None]:
+    """Validate args.pdb and args.fetch"""
+
+    pdb = check_pdb_arg(args.pdb)
+    if isinstance(pdb, tuple):
+        # error:
+        logger.error(pdb[1])
+        return None
+    elif isinstance(pdb, str):
+        if not args.fetch:
+            logger.error(ERR_MISSING_FETCH_FLAG.format(pdb))
+            return None
+    else:
+        if args.fetch:
+            logger.error(ERR_FETCH_EXISTING_FILE.format(pdb))
+            return None
+
+    return pdb
 
 
 def get_single_pdb_report(args: Union[Namespace, dict]):
@@ -343,7 +364,16 @@ def get_single_pdb_report(args: Union[Namespace, dict]):
     if isinstance(args, dict):
         args = Namespace(**args)
 
-    pdb = validate_input(args)
+    pdb = validate_pdb_inputs(args)
+    if pdb is None:
+        logger.error("Input validation failed.")
+        return
+    if not isinstance(pdb, Path):
+        pdb = qrs.get_rcsb_pdb(pdb)
+        if not isinstance(pdb, Path):
+            logger.error(f"Could not download from rcsb.org.")
+            return
+
     prot_d, step1_d = collect_info(pdb)
     report_lines = collect_info_lines(prot_d, step1_d)
     save_report(report_lines, pdb_fp=pdb)

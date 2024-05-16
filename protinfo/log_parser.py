@@ -16,8 +16,7 @@ from protinfo import queries as qrs
 from typing import Union
 
 
-def extract_content_between_tags(text: str,
-                                 tag1: str, tag2: str = "   Done") -> str:
+def extract_content_between_tags(text: str, tag1: str, tag2: str = "   Done") -> str:
     """Extracts the content between two string tags in a text.
     Args:
       text: A text.
@@ -83,11 +82,11 @@ runlog1_headers = [
     "   Identify NTR and CTR...",
     "   Label backbone, sidechain and altLoc conformers...",
     "   Load pdb lines into data structure...",
-    "   Strip free cofactors with SAS >   5%...",   # 5
+    "   Strip free cofactors with SAS >   5%...",  # 5
     "   Check missing heavy atoms and complete altLoc conformers...",
     "   Find distance clash (<2.000)...",
     "   Make connectivity network ...",
-    ]
+]
 
 
 def get_log1_specs(loghdrs: list) -> dict:
@@ -98,15 +97,19 @@ def get_log1_specs(loghdrs: list) -> dict:
     all = defaultdict(dict)
     for i, hdr in enumerate(loghdrs, start=1):
         if i == 1:
-            all[i] = LogHdr(i, hdr,
-                            rpt_hdr="Renamed:",
-                            line_start="   Renaming ",
-                            )
+            all[i] = LogHdr(
+                i,
+                hdr,
+                rpt_hdr="Renamed:",
+                line_start="   Renaming ",
+            )
         elif i == 2:
-            all[i] = LogHdr(i, hdr,
-                            rpt_hdr="Termini:",
-                            line_start="      Labeling ",
-                            )
+            all[i] = LogHdr(
+                i,
+                hdr,
+                rpt_hdr="Termini:",
+                line_start="      Labeling ",
+            )
         elif i == 3:
             b3_exclude = (
                 "   Creating temporary parameter file for unrecognized residue...",
@@ -115,41 +118,57 @@ def get_log1_specs(loghdrs: list) -> dict:
                 "   Error! premcce_confname()",
                 " is already loaded somewhere else.",
             )
-            all[i] = LogHdr(i, hdr,
-                            rpt_hdr="Labeling:",
-                            line_start="      Labeling ",
-                            skip_lines=b3_exclude
-                            )
+            all[i] = LogHdr(
+                i,
+                hdr,
+                rpt_hdr="Labeling:",
+                line_start="      Labeling ",
+                skip_lines=b3_exclude,
+            )
         elif i == 4:
             # keep as is until error found
-            all[i] = LogHdr(i, hdr,
-                            rpt_hdr="Load Structure:",
-                            )
+            all[i] = LogHdr(
+                i,
+                hdr,
+                rpt_hdr="Load Structure:",
+            )
         elif i == 5:
-            all[i] = LogHdr(i, hdr,
-                            rpt_hdr="Free Cofactors:",
-                            skip_lines=("free cofactors were stripped off in this round",
-                                        "saved in debug.log.")
-                            )
+            all[i] = LogHdr(
+                i,
+                hdr,
+                rpt_hdr="Free Cofactors:",
+                skip_lines=(
+                    "free cofactors were stripped off in this round",
+                    "saved in debug.log.",
+                ),
+            )
         elif i == 6:
-            all[i] = LogHdr(i, hdr,
-                            rpt_hdr="Missing Heavy Atoms:",
-                            line_start="   Missing heavy atom  ",
-                            skip_lines=['   Missing heavy atoms detected.']
-                            )
+            all[i] = LogHdr(
+                i,
+                hdr,
+                rpt_hdr="Missing Heavy Atoms:",
+                line_start="   Missing heavy atom  ",
+                skip_lines=["   Missing heavy atoms detected."],
+            )
         elif i == 7:
-            all[i] = LogHdr(i, hdr,
-                            rpt_hdr="Distance Clashes:",
-                            )
+            all[i] = LogHdr(
+                i,
+                hdr,
+                rpt_hdr="Distance Clashes:",
+            )
         elif i == 8:
-            all[i] = LogHdr(i, hdr,
-                            rpt_hdr="Connectivity:",
-                            )
+            all[i] = LogHdr(
+                i,
+                hdr,
+                rpt_hdr="Connectivity:",
+            )
         else:
             # unknown
-            all[i] = LogHdr(i, hdr,
-                            rpt_hdr="Other:",
-                            )
+            all[i] = LogHdr(
+                i,
+                hdr,
+                rpt_hdr="Other:",
+            )
 
     return dict(all)
 
@@ -170,7 +189,6 @@ class RunLog1:
         self.txt_blocks = self.get_blocks()
 
     def get_debuglog_species(self) -> str:
-
         fp = self.s1_dir.joinpath("debug.log")
         df = pd.read_csv(fp, sep=r"\s+", header=None, engine="python")
         txt = "Species and properties with assigned default values in debug.log:\n"
@@ -181,7 +199,6 @@ class RunLog1:
 
     @staticmethod
     def process_content_block(content: list, lhdr: LogHdr) -> list:
-
         out = []
         skip = lhdr.skip_lines is not None
         change = lhdr.line_start is not None
@@ -298,8 +315,9 @@ def filter_heavy_atm_section(pdb: Path, s1_info_d: dict) -> dict:
     # term values: [2-tuples]
     term = s1_info_d[pdb.stem]["MCCE.Step1"]["Termini:"]
     heavy = s1_info_d[pdb.stem]["MCCE.Step1"]["Missing Heavy Atoms:"]
-    _ = heavy.pop(-1)
-    # =Ignore warning messages if they are in the terminal residues
+    if len(heavy) > 1:
+        _ = heavy.pop(-1)
+        # == Ignore warning messages if they are in the terminal residues
 
     hvy_lst = []
     for line in heavy:
