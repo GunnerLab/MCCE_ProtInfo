@@ -10,11 +10,16 @@ import logging
 from pathlib import Path
 import shutil
 import subprocess
-from typing import Union
+import sys
+from typing import Tuple, Union
 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
+
+
+ERR_CALL_NOT_IN_FILE_DIR = """
+Call ProtInfo from where the pdb resides."""
 
 
 def subprocess_run(
@@ -27,9 +32,7 @@ def subprocess_run(
     """Wraps subprocess.run. Return CompletedProcess or err obj."""
 
     try:
-        data = subprocess.run(
-            cmd, capture_output=capture_output, check=check, text=text, shell=shell
-        )
+        data = subprocess.run(cmd, capture_output=capture_output, check=check, text=text, shell=shell)
     except subprocess.CalledProcessError as e:
         data = e
 
@@ -71,6 +74,46 @@ def get_cif_protname(cif_fp: Path):
     return response.stdout.split(maxsplit=1)[1]
 
 
+def cif2pdb(cif_fp: Path) -> Path:
+    """Convert a .cif file to a .pdb file.
+    The saved pdb file is truncated to the maximum number of atoms
+    if their number in the .cif exceeds the 99,999 pdb limit.
+    The output file header will be:
+        HEADER    <cif_fp.name> converted to pdb by MCCE_ProtInfo; truncated: [True | False]
+        TITLE     <protname from .cif file>
+    """
+
+    # Warning: If the file contains too many atoms, it will be saved truncated;
+    # if auth_residues=False, it will do so silently! Here we need that info for
+    # the pdb header
+    HDR = "HEADER    {} converted to pdb by MCCE_ProtInfo; truncated: {}\n"
+    HDR = HDR + "TITLE     {}\n"
+
+    protname = get_cif_protname(cif_fp)
+    cif_out = f"{cif_fp.name[:4]}.pdb"
+
+    parser = PDB.MMCIFParser(auth_residues=True, QUIET=True)
+    structure = parser.get_structure("cif", cif_fp)
+    N = len(list(structure.get_atoms()))
+    too_large = N > 99_999
+
+    io = PDB.PDBIO()
+    io.set_structure(structure)  # coords only
+    with open(cif_out, "w") as fh:
+        try:
+            io.save(fh)
+        except Exception as e:
+            if too_large:
+                logger.warning(f"The number of atoms ({N:,}) exceeds the 99,999 PDB format limit: truncated file.")
+            else:
+                logger.warning(f"Error while saving cif file as {cif_out}: {e}")
+
+    hdr = HDR.format(cif_fp.name, too_large, protname)
+    insert_pdb_hdr(cif_out, hdr)
+
+    return cif_out
+
+
 def insert_pdb_hdr(pdb_from_cif_fp: Path, hdr: str):
     """Insert the pdb header info into a pdb file that was converted from .cif."""
 
@@ -83,44 +126,60 @@ def insert_pdb_hdr(pdb_from_cif_fp: Path, hdr: str):
     return
 
 
-def cif2pdb(cif_fp: Path) -> Path:
-    """Convert a .cif file to a .pdb file.
-    The saved pdb file is truncated to the maximum number of atoms
-    if their number in the .cif exceeds the 99,999 pdb limit.
-    The output file header will be:
-        HEADER    <cif_fp.name> converted to pdb by MCCE_ProtInfo; truncated: [True | False]
-        TITLE     <protname from .cif file>
+def file_in_current_dir(fp: Path) -> bool:
+    """Return whether the given file path is in the current directory."""
+
+    return fp.parent == Path.cwd()
+
+
+def check_pdb_arg(input_pdb: str) -> Union[Path, str, Tuple[None, str]]:
+    """Validate input_pdb str, which can be either a pdb id or a pdb file."""
+
+    pdb = Path(input_pdb).resolve()
+
+    if not pdb.exists():
+        # if no extension, assume pdbid:
+        if not pdb.suffix:
+            s = len(pdb.stem)
+            if s != 4:
+                return None, f"Invalid pdbid length: {s}; 4 expected."
+
+            return input_pdb
+
+        return None, f"File not found: {pdb}"
+
+    if not file_in_current_dir(pdb):
+        return None, ERR_CALL_NOT_IN_FILE_DIR
+
+    if pdb.suffix != ".pdb":
+        return None, f"Not a valid extension: {pdb.suffix}"
+
+    return pdb
+
+
+def save_report(
+    report_lines: str,
+    pdb_fp: Union[Path, None] = None,
+    report_fp: Union[Path, None] = None,
+):
+    """Write and save the ProtInfo report.
+    Args:
+      report_lines (str): The lines to write
+      pdb_fp (Union[Path, None], None): The pdb filepath if the
+        report is for a single pdb. Cannot be None if report_fp is.
+      report_fp (Union[Path, None], None): The filepath of the output
+        report if pdb_fp is None (pdb_fp has precedence).
     """
 
-    parser = PDB.MMCIFParser(auth_residues=True, QUIET=True)
-    # Warning: If the file contains too many atoms, it will be saved truncated;
-    # if auth_residues=False, it will do so silently! Here we need that info for
-    # the pdb header
+    if pdb_fp is None and report_fp is None:
+        logger.error("pdb_fp and report_fp cannot both be None.")
+        sys.exit(1)
 
-    HDR = "HEADER    {} converted to pdb by MCCE_ProtInfo; truncated: {}\n"
-    HDR = HDR + "TITLE     {}\n"
+    if pdb_fp is not None:
+        # (re)set report_fp
+        report_fp = pdb_fp.parent.joinpath("ProtInfo.md")
 
-    protname = get_cif_protname(cif_fp)
-    cif_out = f"{cif_fp.name[:4]}.pdb"
+    with open(report_fp, "w") as fo:
+        fo.writelines(report_lines)
 
-    structure = parser.get_structure("cif", cif_fp)
-    N = len(list(structure.get_atoms()))
-    too_large = N > 99_999
-
-    io = PDB.PDBIO()
-    io.set_structure(structure)  # coords only
-    with open(cif_out, "w") as fh:
-        try:
-            io.save(fh)
-        except Exception as e:
-            if too_large:
-                logger.warning(
-                    f"The number of atoms ({N:,}) exceeds the 99,999 PDB format limit: truncated file."
-                )
-            else:
-                logger.warning(f"Error while saving cif file as {cif_out}: {e}")
-
-    hdr = HDR.format(cif_fp.name, too_large, protname)
-    insert_pdb_hdr(cif_out, hdr)
-
-    return cif_out
+    return

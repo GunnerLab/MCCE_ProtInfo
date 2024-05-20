@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from protinfo import _version
 import logging
 import shutil
 import warnings
@@ -25,4 +26,5 @@ logging.basicConfig(
     encoding="utf-8",
 )
 rootlog = logging.getLogger()
+rootlog.info(f"ProtInfo version :{_version.version_tuple}")
 # ................................................................................

@@ -6,7 +6,8 @@ _tmp*
 notebooks/*.pdb*
 
 # Byte-compiled / optimized / DLL files
-__pycache__/
+__pycache__
+.pytest_cache/_
 *.py[cod]
 *$py.class
 

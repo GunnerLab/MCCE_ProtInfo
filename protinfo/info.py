@@ -2,169 +2,59 @@
 
 """
 Module: info.py
-Functions to process information about a protein:
+
+Holds functions to gather information about a protein obtained
+from bio_parser.py and log_parser.py:
  - Info about the input protein from Bio.PDB parser
  - Info from MCCE step1 run.log, debug.log when step1 can be run
 
- 1. collect_info
- 2. collect_info_lines
- 3. save_report
-
+Main steps:
+  1. validate_pdb_inputs
+  2. queries.get_rcsb_pdb(pdb):
+     download bio-assembly if pdb is id
+  3. collect_info in two dicts:
+     first: from Bio.parser, second: from run.log parser
+  4. collect_info_lines from the two dicts
+  5. save_report
 """
 
-from argparse import Namespace
-import Bio.PDB
-from Bio.PDB.PDBExceptions import PDBConstructionWarning
-from collections import Counter, defaultdict
+
 import logging
 from pathlib import Path
-from protinfo import USER_MCCE, io_utils as iou, run, queries as qrs
-from protinfo.log_parser import info_s1_log
-import sys
-import time
+from protinfo import USER_MCCE, bio_parser, log_parser, run
 from typing import Tuple, Union
-import warnings
 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
-# error msg as fstring:
-ERR_FETCH_EXISTING_FILE = """
-The input pdb ({}) resolves to an existing file: to OVERWRITE it with
-the biological assembly from a fresh download, remove the extension
-OR do not pass the --fetch flag at the command line.
-"""
-ERR_MULTI_MODELS = "MCCE cannot handle multi-model proteins."
-ERR_TRUNCATED_CONVERSION = """
-This pdb was truncated during the .cif to .pdb format conversion
-because the number of atoms exceeds 99,999."""
-ERR_CALL_NOT_IN_FILE_DIR = """
-Call ProtInfo from where the pdb resides."""
-ERR_MISSING_FETCH_FLAG = """
-The input pdb ({}) seems to be a pdbid. To download its
-biological assembly, add --fetch at the command line."""
-
-
-def process_warnings(w: PDBConstructionWarning) -> dict:
-    """Function to collapse warnings into categories."""
-
-    warn_d = defaultdict(list)  # output dict
-    chn_d = defaultdict(list)
-    unrec_l = []
-    neg_l = []
-    miss_l = []
-
-    # Unpack the warnings list
-    for i, info in enumerate(w):
-        # extract str past "WARNING: ":
-        line = info.message.args[0].removeprefix("WARNING: ")
-
-        if line.startswith("Chain"):
-            newl = line[:-1].replace(" is discontinuous at ", "").split("line")
-            chn_d[newl[0]].append("Line" + newl[1])
-        elif line.startswith("Ignoring"):
-            newl = line.removeprefix("Ignoring unrecognized ").split("at")
-            unrec_l.append((newl[0].strip().capitalize(), newl[1].strip().capitalize()))
-        elif line.startswith("Negative"):
-            neg_l.append(line)
-        elif line.startswith("Some atoms"):
-            miss_l.append(line)
-
-    if chn_d:
-        warn_d["Discontinuity"] = dict(chn_d)
-    if unrec_l:
-        warn_d["Unrecognized records"] = unrec_l
-    if neg_l:
-        warn_d["Negative occupancy"] = neg_l
-    if miss_l:
-        warn_d["Missing"] = miss_l
-
-    return dict(warn_d)
-
-
-def info_input_prot(pdb: Path) -> dict:
-    """Return information about 'pdb' from Bio.PDB.PDBParser.
-    The output dict structure follow the Bio.PDB.PDBParser
-    structural hierarchy: Model, Chains, Residues, Atoms, along with
-    a warnings section if any.
+def collect_info(pdb: Path) -> Tuple[dict, Union[dict, None]]:
+    """Return at least one dict holding info from Bio.PDB.PDBParser.
+    The second dict is None when step1 cannot be run, otherwise
+    it contains info from the parsed run.log file.
     """
 
-    parser = Bio.PDB.PDBParser()
+    DO_STEP1 = USER_MCCE is not None
+    step1_d = None
 
-    dout = defaultdict(dict)
-    dinner = defaultdict(list)
-
+    # Info from Bio.Parser:
+    prot_d = bio_parser.info_input_prot(pdb)
     pdbid = pdb.stem
+    # if multimodels, no need to run step1:
+    if "MultiModels" in prot_d[pdbid]["ParsedStructure"]:
+        prot_d[pdb.stem]["Invalid"] = bio_parser.ERR_MULTI_MODELS
+        DO_STEP1 = False
 
-    try:
-        with warnings.catch_warnings(record=True, append=True) as w:
-            warnings.simplefilter("always", category=PDBConstructionWarning)
+    if "Truncation" in prot_d[pdbid]["ParsedStructure"]:
+        prot_d[pdb.stem]["Failed conversion"] = bio_parser.ERR_TRUNCATED_CONVERSION
+        DO_STEP1 = False
 
-            structure = parser.get_structure(pdbid, pdb.name)
+    if DO_STEP1:
+        run.do_step1(pdb)
+        step1_d = log_parser.info_s1_log(pdb)
 
-    except Exception as ex:
-        dout[pdbid]["ParsedStructure"]["ERROR"] = ex.args
-        return dict(dout)
-
-    pdb_hdr_d = Bio.PDB.parse_pdb_header(pdb)
-    protname = pdb_hdr_d.get("name")
-    if protname is not None:
-        dinner["Name"].append(protname.title())
-    # check if header has truncation warning:
-    note_hdr = pdb_hdr_d.get("head")
-    if note_hdr is not None:
-        if "truncated" in note_hdr and note_hdr.endswith("true"):
-            dinner["Truncation"].append(f"WARNING: {note_hdr}")
-
-    n_models = len(structure)
-    if n_models > 1:
-        dinner["MultiModels"].append(n_models)
-    else:
-        s0 = structure[0]
-        chains = list(s0.get_chains())
-        n_chains = len(chains)
-        n_res = 0
-        n_hoh = 0
-        cnames = []
-        for c in chains:
-            cname = c.get_id()
-            cnames.append(cname)
-
-            dc = defaultdict(dict)
-
-            res = list(c.get_residues())
-            n_res += len(res)
-            n_hoh = len([r for r in res if r.resname.strip() == "HOH"])
-
-            atoms = c.get_atoms()
-            altlocs = []
-            c = Counter()
-            for a in atoms:
-                alt = a.get_altloc()
-                if alt != " ":
-                    r = a.get_parent()
-                    rname = r.get_resname()
-                    rid = r.get_id()[1]
-                    idx = a.get_serial_number()
-                    c[(rname, rid, a.get_name(), idx)] += 1
-
-            altlocs = [(itm, cnt) for itm, cnt in c.items() if cnt > 1]
-            if altlocs:
-                dc[cname] = altlocs
-                dinner["Atoms.MultipleAltLocs"].append(dict(dc))
-
-        dinner["Chains"].append((n_chains, cnames))
-        dinner["Residues"].append(n_res)
-        dinner["Waters"].append(n_hoh)
-
-    dout[pdbid]["ParsedStructure"] = dict(dinner)
-    if len(w):
-        warn_d = process_warnings(w)
-        dout[pdbid]["ParsedStructure"]["Warnings"] = warn_d
-
-    return dict(dout)
+    return prot_d, step1_d
 
 
 def get_pdb_report_lines(pdbid: str, prot_d: dict, s1_d: Union[dict, None]) -> str:
@@ -194,28 +84,20 @@ def get_pdb_report_lines(pdbid: str, prot_d: dict, s1_d: Union[dict, None]) -> s
             report = report + f"### {k}\n"
             for val in subd[k0][k]:
                 if i == 0 and k == "Warnings":
-                    report = (
-                        report
-                        + f"  - <strong><font color='red'>{val}</font> </strong>\n"
-                    )
+                    report = report + f"  - <strong><font color='red'>{val}</font> </strong>\n"
                     d = subd[k0][k][val]
                     for w in d:
                         report = report + f"    - {w}: {d[w]}\n"
 
                 elif i == 1 and isinstance(val, str) and val.startswith("Generic"):
-                    report = (
-                        report
-                        + f"  - <strong><font color='red'>{val}</font> </strong>\n"
-                    )
+                    report = report + f"  - <strong><font color='red'>{val}</font> </strong>\n"
 
                 elif i == 1 and k == "Distance Clashes:":
                     report = report + f"{val}\n"
 
                 elif isinstance(val, tuple) or isinstance(val, list):
                     ter, lst = val
-                    report = (
-                        report + f"  * <strong>{ter} </strong> : {', '.join(lst)}\n"
-                    )
+                    report = report + f"  * <strong>{ter} </strong> : {', '.join(lst)}\n"
                 else:
                     report = report + f"  - {val}\n"
 
@@ -237,145 +119,3 @@ def collect_info_lines(prot_d: dict, s1_d: Union[dict, None]) -> str:
             rpt_lines = rpt_lines + get_pdb_report_lines(pdb, prot_d[pdb], s1_d)
 
     return rpt_lines
-
-
-def save_report(
-    report_lines: str,
-    pdb_fp: Union[Path, None] = None,
-    report_fp: Union[Path, None] = None,
-):
-    """Write and save the ProtInfo report.
-    Args:
-      report_lines (str): The lines to write
-      pdb_fp (Union[Path, None], None): The pdb filepath if the
-        report is for a single pdb. Cannot be None if report_fp is.
-      report_fp (Union[Path, None], None): The filepath of the output
-        report if pdb_fp is None (pdb_fp has precedence).
-    """
-
-    if pdb_fp is None and report_fp is None:
-        logger.error("pdb_fp and report_fp cannot both be None.")
-        sys.exit(1)
-
-    if pdb_fp is not None:
-        # (re)set report_fp
-        report_fp = pdb_fp.parent.joinpath("ProtInfo.md")
-
-    with open(report_fp, "w") as fo:
-        fo.writelines(report_lines)
-
-    return
-
-
-def collect_info(pdb: Path) -> Tuple[dict, Union[dict, None]]:
-    """Return at least one dict holding info from Bio.PDB.PDBParser.
-    The second dict is None when step1 cannot be run, otherwise
-    it contains info from the parsed run.log file.
-    """
-
-    DO_STEP1 = USER_MCCE is not None
-    step1_d = None
-
-    # Info from Bio.Parser:
-    prot_d = info_input_prot(pdb)
-    pdbid = pdb.stem
-    # if multimodels, no need to run step1:
-    if "MultiModels" in prot_d[pdbid]["ParsedStructure"]:
-        prot_d[pdb.stem]["Invalid"] = ERR_MULTI_MODELS
-        DO_STEP1 = False
-
-    if "Truncation" in prot_d[pdbid]["ParsedStructure"]:
-        prot_d[pdb.stem]["Failed conversion"] = ERR_TRUNCATED_CONVERSION
-        DO_STEP1 = False
-
-    if DO_STEP1:
-        # s1_start = time.time()
-        run.do_step1(pdb)
-        # elapsed = time.time() - s1_start
-        # print(f"step1 took {elapsed:,.2f} s ({elapsed/60:,.2f} min).")
-        time.sleep(2)
-        step1_d = info_s1_log(pdb)
-
-    return prot_d, step1_d
-
-
-def file_in_current_dir(fp: Path) -> bool:
-    """Return whether the fiven file path is in the current directory."""
-
-    return fp.parent == Path.cwd()
-
-
-def check_pdb_arg(input_pdb: str) -> Union[Path, str, Tuple[None, str]]:
-    """Validate input_pdb str, which can be either a pdb id or a pdb file."""
-
-    pdb = Path(input_pdb).resolve()
-
-    if not pdb.exists():
-        # if no extension, assume pdbid:
-        if not pdb.suffix:
-            s = len(pdb.stem)
-            if s != 4:
-                return None, f"Invalid pdbid length: {s}; 4 expected."
-
-            return input_pdb
-
-        return None, f"File not found: {pdb}"
-
-    if not file_in_current_dir(pdb):
-        return None, ERR_CALL_NOT_IN_FILE_DIR
-
-    if pdb.suffix != ".pdb":
-        return None, f"Not a valid extension: {pdb.suffix}"
-
-    return pdb
-
-
-def validate_pdb_inputs(args: Namespace) -> Union[Path, str, None]:
-    """Validate args.pdb and args.fetch"""
-
-    pdb = check_pdb_arg(args.pdb)
-    if isinstance(pdb, tuple):
-        # error:
-        logger.error(pdb[1])
-        return None
-    elif isinstance(pdb, str):
-        if not args.fetch:
-            logger.error(ERR_MISSING_FETCH_FLAG.format(pdb))
-            return None
-    else:
-        if args.fetch:
-            logger.error(ERR_FETCH_EXISTING_FILE.format(pdb))
-            return None
-
-    return pdb
-
-
-def get_single_pdb_report(args: Union[Namespace, dict]):
-    """Get info and save report for a single pdb.
-    This function is called by the cli.
-    Expected keys in args: pdb [Path, str], fetch [bool].
-    Workflow:
-      1. validate_input
-      2. collect_info in dicts
-      3. collect_info_lines
-      4. save_report
-    """
-
-    if isinstance(args, dict):
-        args = Namespace(**args)
-
-    pdb = validate_pdb_inputs(args)
-    if pdb is None:
-        logger.error("Input validation failed.")
-        return
-    if not isinstance(pdb, Path):
-        pdb = qrs.get_rcsb_pdb(pdb)
-        if not isinstance(pdb, Path):
-            logger.error(f"Could not download from rcsb.org.")
-            return
-
-    prot_d, step1_d = collect_info(pdb)
-    report_lines = collect_info_lines(prot_d, step1_d)
-    save_report(report_lines, pdb_fp=pdb)
-
-    return

@@ -185,6 +185,7 @@ class RunLog1:
         self.pdb = pdb
         self.pdbid = self.pdb.stem
         self.s1_dir = self.pdb.parent.joinpath("step1_run")
+        # id of block with debug.log mentions:
         self.check_debuglog_idx = [5]
         self.txt_blocks = self.get_blocks()
 
@@ -198,21 +199,21 @@ class RunLog1:
         return txt
 
     @staticmethod
-    def process_content_block(content: list, lhdr: LogHdr) -> list:
+    def process_content_block(content: list, loghdr: LogHdr) -> list:
         out = []
-        skip = lhdr.skip_lines is not None
-        change = lhdr.line_start is not None
+        skip = loghdr.skip_lines is not None
+        change = loghdr.line_start is not None
         newtpl = None
 
         # section that lists new.tpl creation:
-        if lhdr.idx == 3:
+        if loghdr.idx == 3:
             newtpl = []
 
         for line in content:
             if not line:
                 continue
 
-            if lhdr.idx == 3:
+            if loghdr.idx == 3:
                 if line.startswith("   Error! premcce_confname()"):
                     # add conf name & link:
                     conf = line.rsplit(maxsplit=1)[1]
@@ -222,10 +223,10 @@ class RunLog1:
                         pchem = qrs.get_pubchem_compound_link(conf)
                     newtpl.append(f"{conf}::  {pchem}")
 
-            if lhdr.idx == 5:
+            if loghdr.idx == 5:
                 # flag if 'debug.log' found in line:
-                if not lhdr.debuglog:
-                    lhdr.has_debuglog(line)
+                if not loghdr.debuglog:
+                    loghdr.has_debuglog(line)
 
                 if line.startswith("   Total deleted cofactors"):
                     if int(line.rsplit(maxsplit=1)[1][:-1]) != 0:
@@ -234,25 +235,25 @@ class RunLog1:
                         continue
 
             if skip:
-                if isinstance(lhdr.skip_lines, tuple):
+                if isinstance(loghdr.skip_lines, tuple):
                     found = False
-                    for t in lhdr.skip_lines:
+                    for t in loghdr.skip_lines:
                         found = found or (t in line)
                     if found:
                         continue
                 else:
-                    if line in lhdr.skip_lines:
+                    if line in loghdr.skip_lines:
                         continue
 
             if change:
                 # remove common start:
-                if line.startswith(lhdr.line_start):
-                    line = line.removeprefix(lhdr.line_start)
+                if line.startswith(loghdr.line_start):
+                    line = line.removeprefix(loghdr.line_start)
 
             out.append(line)
 
         # check if new tpl confs:
-        if lhdr.idx == 3 and newtpl:
+        if loghdr.idx == 3 and newtpl:
             out.append("Generic topology file created for:")
             for t in newtpl:
                 out.append(t)
@@ -334,9 +335,9 @@ def filter_heavy_atm_section(pdb: Path, s1_info_d: dict) -> dict:
 
 def info_s1_log(pdb: Path) -> dict:
     dout = {}
-    silog = RunLog1(pdb)
+    s1log = RunLog1(pdb)
     # set the section data with dict:
-    dout[pdb.stem] = {"MCCE.Step1": silog.txt_blocks}
+    dout[pdb.stem] = {"MCCE.Step1": s1log.txt_blocks}
     dout = filter_heavy_atm_section(pdb, dout)
 
     return dout
