@@ -4,7 +4,6 @@ import logging
 from pathlib import Path
 import protinfo.io_utils as iou
 import requests
-import sys
 from typing import Tuple, Union
 
 
@@ -24,29 +23,31 @@ def get_rcsb_pdb(pdbid: str) -> Union[Path, Tuple[None, str]]:
     """
 
     pdbid = pdbid.lower()
-    bioa = [False, False]  # to id which bio assembly was saved: pdb, cif
     bionames = pdbid + ".pdb1", f"{pdbid}-assembly1.cif.gz"
     pdb_file = pdbid + ".pdb"
+
     content = None
+    # list of bool to identify which bio assembly was saved:
+    which_ba = [False, False]  # 0: pdb, 1: cif
 
     # try bio assemblies first:
     r0 = rcsb_download(bionames[0])
     if r0.status_code < 400:
-        bioa[0] = True
+        which_ba[0] = True
         pdb_file = bionames[0][:-1]
-        content = r1.content
+        content = r0.content
     else:
         logger.error(f"Error: Could not download the pdb bio assembly:{r0.reason}")
 
         r1 = rcsb_download(bionames[1])
         if r1.status_code < 400:
-            bioa[1] = True
+            which_ba[1] = True
             pdb_file = bionames[1]
             content = r1.content
         else:
             logger.error(f"Error: Could not download the cif bio assembly:{r1.reason}")
 
-    if bioa[0] == bioa[1]:  # both False; last try: legacy pdb
+    if which_ba[0] == which_ba[1]:  # both False; last try: legacy pdb
         r2 = rcsb_download(pdb_file)
         if r2.status_code < 400:
             content = r2.content
@@ -59,7 +60,7 @@ def get_rcsb_pdb(pdbid: str) -> Union[Path, Tuple[None, str]]:
         fo.write(content)
     logger.info("Download completed.")
 
-    if bioa[1]:
+    if which_ba[1]:
         decomp = iou.decompress_gz(Path(pdb_file))
         logger.info(f"{pdb_file} saved & unzipped as {decomp.name}")
         pdb_file = iou.cif2pdb(decomp)
