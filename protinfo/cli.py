@@ -22,7 +22,7 @@ Usage:
 from argparse import ArgumentParser, RawDescriptionHelpFormatter, Namespace
 import logging
 from pathlib import Path
-from protinfo import info, io_utils as iou, queries as qrs
+from protinfo import info, io_utils as iou
 import sys
 from typing import Union
 
@@ -85,8 +85,9 @@ def get_single_pdb_report(args: Union[Namespace, dict]):
     if pdb is None:
         logger.error("Input validation failed.")
         return
+
     if not isinstance(pdb, Path):
-        pdb = qrs.get_rcsb_pdb(pdb)
+        pdb = iou.get_rcsb_pdb(pdb)
         if not isinstance(pdb, Path):
             logger.error("Could not download from rcsb.org.")
             return
@@ -125,7 +126,7 @@ def prot_info_cli(argv=None):
 
     cli_parser = pi_parser()
     args = cli_parser.parse_args(argv)
-    info.get_single_pdb_report(args)
+    get_single_pdb_report(args)
 
     return
 

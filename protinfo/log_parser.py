@@ -12,7 +12,6 @@ from collections import defaultdict
 from dataclasses import dataclass
 import pandas as pd
 from pathlib import Path
-from protinfo import queries as qrs
 from typing import Union
 
 
@@ -31,6 +30,17 @@ def extract_content_between_tags(text: str, tag1: str, tag2: str = "   Done") ->
     end_pos = text.find(tag2, start_pos)
 
     return text[start_pos:end_pos]
+
+
+def get_pubchem_compound_link(compound_id: str) -> str:
+    """Return the unvalidated link of the PubChem page for compund_id.
+    subtance tab
+    """
+    if compound_id:
+        url_fstr = "https://pubchem.ncbi.nlm.nih.gov/#query={}&tab=substance"
+        return url_fstr.format(compound_id.upper())
+    else:
+        return ""
 
 
 @dataclass
@@ -218,9 +228,9 @@ class RunLog1:
                     # add conf name & link:
                     conf = line.rsplit(maxsplit=1)[1]
                     if conf.startswith("_"):
-                        pchem = qrs.get_pubchem_compound_link(conf[1:])
+                        pchem = get_pubchem_compound_link(conf[1:])
                     else:
-                        pchem = qrs.get_pubchem_compound_link(conf)
+                        pchem = get_pubchem_compound_link(conf)
                     newtpl.append(f"{conf}::  {pchem}")
 
             if loghdr.idx == 5:

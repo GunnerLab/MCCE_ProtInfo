@@ -1,14 +1,13 @@
 #!/usr/bin/env python
 
-from protinfo.queries import get_rcsb_pdb
 import os
 from pathlib import Path
+from protinfo.io_utils import get_rcsb_pdb
 import shutil
-import requests
-import pytest
 
 
 tmp_dir = Path.cwd().joinpath("tmp_pinfo")
+
 
 class TestGetRcsbPdb:
     tmp_path = tmp_dir
@@ -35,7 +34,7 @@ class TestGetRcsbPdb:
         return a Path object."""
 
         pdbid = "4lzt"
-        d = self.tmp_path/pdbid
+        d = self.tmp_path / pdbid
         if not d.is_dir():
             d.mkdir()
         os.chdir(d)
@@ -45,21 +44,22 @@ class TestGetRcsbPdb:
         assert isinstance(result, Path)
 
     def test_invalid_pdbid(self):
-        """Given an invalid pdbid, the function should return None."""
+        """Given an invalid pdbid, the function should return a
+        tuple: Tuple[None, str]."""
 
         pdbid = "xyz"
-        d = self.tmp_path/pdbid
+        d = self.tmp_path / pdbid
         if not d.is_dir():
             d.mkdir()
         os.chdir(d)
 
         result = None
-        with pytest.raises(SystemExit):
-            with pytest.raises(requests.exceptions.HTTPError):  
-                  result = get_rcsb_pdb(pdbid)
+        result = get_rcsb_pdb(pdbid)
+
         os.chdir(self.here)
 
-        assert result is None
+        assert result[0] is None
+        assert result[1] == "Error: Could neither download the bio assembly or pdb file."
 
     def test_overwrite_existing_file(self):
         """Given a pdbid that already exists in the current directory,
@@ -67,11 +67,11 @@ class TestGetRcsbPdb:
         """
 
         pdbid = "1ans"
-        d = self.tmp_path/pdbid
+        d = self.tmp_path / pdbid
         if not d.is_dir():
             d.mkdir()
-        
-        existing_file = d.joinpath(f"{pdbid}.pdb") #.resolve()
+
+        existing_file = d.joinpath(f"{pdbid}.pdb")  # .resolve()
         existing_file.touch()
 
         os.chdir(d)
