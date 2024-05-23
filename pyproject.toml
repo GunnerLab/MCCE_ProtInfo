@@ -57,7 +57,7 @@ ProtInfo = "protinfo.cli:prot_info_cli"
 
 [tool.setuptools_scm]
 local_scheme = "no-local-version"  # required for PyPI and TestPyPI
-version_file = "protinfo/_version.py"
+#version_file = "protinfo/_version.py"
 
 [flake8]
 ignore = ['E203', 'E266', 'E501', 'W503']
