@@ -56,7 +56,7 @@ find = {}
 ProtInfo = "protinfo.cli:prot_info_cli"
 
 [tool.setuptools_scm]
-local_scheme = "no-local-version"  # required for PyPI and TestPyPI
+#local_scheme = "no-local-version"  # required for PyPI and TestPyPI
 #version_file = "protinfo/_version.py"
 
 [flake8]
