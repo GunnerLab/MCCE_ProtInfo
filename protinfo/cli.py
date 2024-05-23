@@ -133,3 +133,6 @@ def prot_info_cli(argv=None):
 
 if __name__ == "__main__":
     prot_info_cli(sys.argv)
+
+    if Path("ProtInfo.md").exists():
+        iou.subprocess_run("cat ProtInfo.md")
