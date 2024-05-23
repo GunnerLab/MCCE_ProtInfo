@@ -27,4 +27,3 @@ logging.basicConfig(
 )
 rootlog = logging.getLogger()
 rootlog.info(f"ProtInfo version :{_version.version_tuple}")
-# ................................................................................
