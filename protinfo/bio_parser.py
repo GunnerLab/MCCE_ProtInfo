@@ -91,7 +91,7 @@ def info_input_prot(pdb: Path) -> dict:
             structure = parser.get_structure(pdbid, pdb.name)
 
     except Exception as ex:
-        dout[pdbid]["ParsedStructure"]["ERROR"] = ex.args
+        dout[pdbid]["ParsedStructure"] = {"ERROR": ex.args}
         return dict(dout)
 
     pdb_hdr_d = Bio.PDB.parse_pdb_header(pdb)
