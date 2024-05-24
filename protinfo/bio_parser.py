@@ -49,7 +49,8 @@ def process_warnings(w: PDBConstructionWarning) -> dict:
 
         if line.startswith("Chain"):
             newl = line[:-1].replace(" is discontinuous at ", "").split("line")
-            chn_d[newl[0]].append("Line" + newl[1])
+            # chn_d[newl[0]].append("Line" + newl[1])
+            chn_d[newl[0]].append(int(newl[1]))
         elif line.startswith("Ignoring"):
             newl = line.removeprefix("Ignoring unrecognized ").split("at")
             unrec_l.append((newl[0].strip().capitalize(), newl[1].strip().capitalize()))
@@ -85,13 +86,15 @@ def info_input_prot(pdb: Path) -> dict:
     pdbid = pdb.stem
 
     try:
-        with warnings.catch_warnings(record=True, append=True) as w:
+        with warnings.catch_warnings(record=True) as w:
+            # catch_warnings w/o happen (3.10): same output
+            # possibly due to specified filter:
             warnings.simplefilter("always", category=PDBConstructionWarning)
 
             structure = parser.get_structure(pdbid, pdb.name)
 
     except Exception as ex:
-        dout[pdbid]["ParsedStructure"] = {"ERROR": ex.args}
+        dout[pdbid]["ParsedStructure"] = {"ERROR": ex.args + " (Possibly not biopython related.)"}
         return dict(dout)
 
     pdb_hdr_d = Bio.PDB.parse_pdb_header(pdb)
