@@ -16,7 +16,7 @@ from typing import Tuple, Union
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.WARNING)
+# logger.setLevel(logging.WARNING)
 
 
 ERR_CALL_NOT_IN_FILE_DIR = """
@@ -73,6 +73,28 @@ def get_cif_protname(cif_fp: Path):
     response = subprocess_run(cmd, check=False)
 
     return response.stdout.split(maxsplit=1)[1]
+
+
+def get_path_keys(pdb: Path) -> Union[dict, None]:
+    """
+    Return path keys from run.prm.record as a dict with keys:
+    ["topology files","renaming file"].
+    """
+    d = {}
+    desc = ["topology files", "renaming file"]
+    runrec = pdb.parent.joinpath("step1_run", "run.prm.record")
+    if not runrec.exists():
+        logger.error("Not found: run.prm.record")
+        return None
+
+    cmd = "grep -E 'MCCE_HOME|RENAME_RULES' " + str(runrec)
+    response = subprocess_run(cmd, check=False)
+    for i, line in enumerate(response.stdout.splitlines()):
+        d[desc[i]] = line[:-1].split("(")[0].strip()
+
+    d[desc[0]] = d[desc[0]] + "/param"
+
+    return d
 
 
 def cif2pdb(cif_fp: Path) -> Path:
@@ -139,10 +161,9 @@ def check_pdb_arg(input_pdb: str) -> Union[Path, str, Tuple[None, str]]:
     """
 
     pdb = Path(input_pdb).resolve()
-
     if not pdb.exists():
-        # if no extension, assume pdbid:
         if not pdb.suffix:
+            # if no extension, assume pdbid:
             s = len(pdb.stem)
             if s != 4:
                 return None, f"Invalid pdbid length: {s}; 4 expected."
@@ -167,15 +188,29 @@ def save_report(
 ):
     """Write and save the ProtInfo report.
     Args:
-      report_lines (str): The lines to write
+      report_lines (str): The lines to write.
       pdb_fp (Union[Path, None], None): The pdb filepath if the
         report is for a single pdb. Cannot be None if report_fp is.
       report_fp (Union[Path, None], None): The filepath of the output
-        report if pdb_fp is None (pdb_fp has precedence).
+        report if pdb_fp is None.
+        Use report_fp if the report_lines are collated from a set
+        of runs.
+    Note:
+      Neither pdb_fp or report_fp can be both None or both set:
+      one of them must be None.
     """
 
     if pdb_fp is None and report_fp is None:
-        logger.error("pdb_fp and report_fp cannot both be None.")
+        logger.error("ValueError: pdb_fp and report_fp cannot both be None.")
+        sys.exit(1)
+
+    if pdb_fp is not None and report_fp is not None:
+        logger.error(
+            """
+                     ValueError: pdb_fp and report_fp cannot both be valued.
+                     Set pdb_fp to None if report_lines come from multiple
+                     pdbs, and conversely for a single pdb run."""
+        )
         sys.exit(1)
 
     if pdb_fp is not None:

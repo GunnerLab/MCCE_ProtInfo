@@ -24,7 +24,7 @@ import warnings
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.WARNING)
+# logger.setLevel(logging.WARNING)
 
 
 ERR_MULTI_MODELS = "MCCE cannot handle multi-model proteins."
@@ -95,12 +95,14 @@ def info_input_prot(pdb: Path) -> dict:
 
     except Exception as ex:
         dout[pdbid]["ParsedStructure"] = {"ERROR": ex.args + " (Possibly not biopython related.)"}
+        logger.error(f"ERROR: {ex.args} - (Possibly not biopython related.)")
         return dict(dout)
 
     pdb_hdr_d = Bio.PDB.parse_pdb_header(pdb)
     protname = pdb_hdr_d.get("name")
-    if protname is not None:
-        dinner["Name"].append(protname.title())
+    # if protname is not None:
+    #    dinner["Name"].append(protname.title())
+
     # check if header has truncation warning:
     note_hdr = pdb_hdr_d.get("head")
     if note_hdr is not None:
@@ -148,6 +150,8 @@ def info_input_prot(pdb: Path) -> dict:
         dinner["Residues"].append(n_res)
         dinner["Waters"].append(n_hoh)
 
+    if protname is not None:
+        dout[pdbid]["Name"] = protname.title()
     dout[pdbid]["ParsedStructure"] = dict(dinner)
     if len(w):
         warn_d = process_warnings(w)

@@ -29,7 +29,7 @@ from typing import Union
 
 CLI_NAME = "ProtInfo"
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+# logger.setLevel(logging.INFO)
 
 
 # error msg as fstring:
@@ -99,6 +99,13 @@ def get_single_pdb_report(args: Union[Namespace, dict]):
     return
 
 
+def arg_valid_pdb_len(p: str) -> Union[None, str]:
+    """Return None if pdb is empty str."""
+    if not len(p):
+        return None
+    return p
+
+
 def pi_parser():
     p = ArgumentParser(
         prog=f"{CLI_NAME}",
@@ -107,7 +114,7 @@ def pi_parser():
     )
     p.add_argument(
         "pdb",
-        type=str,
+        type=arg_valid_pdb_len,
         help="""A pdb file name (in the current directory) or
         a pdbid (assumed valid).""",
     )
@@ -126,13 +133,19 @@ def prot_info_cli(argv=None):
 
     cli_parser = pi_parser()
     args = cli_parser.parse_args(argv)
+    if args.pdb is None:
+        logger.error("No input: you must provide a pdbid or a pdb filename.")
+        sys.exit("No input: you must provide a pdbid or a pdb filename.")
+
     get_single_pdb_report(args)
+
+    rpt_fp = Path("ProtInfo.md")
+    if rpt_fp.exists():
+        with open(rpt_fp) as f:
+            print(f.read())
 
     return
 
 
 if __name__ == "__main__":
     prot_info_cli(sys.argv)
-
-    if Path("ProtInfo.md").exists():
-        iou.subprocess_run("cat ProtInfo.md")

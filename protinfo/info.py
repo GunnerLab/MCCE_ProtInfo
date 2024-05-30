@@ -22,11 +22,12 @@ Main steps:
 import logging
 from pathlib import Path
 from protinfo import USER_MCCE, bio_parser, log_parser, run
+from time import sleep
 from typing import Tuple, Union
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.WARNING)
+# logger.setLevel(logging.WARNING)
 
 
 def collect_info(pdb: Path) -> Tuple[dict, Union[dict, None]]:
@@ -52,18 +53,20 @@ def collect_info(pdb: Path) -> Tuple[dict, Union[dict, None]]:
 
     if DO_STEP1:
         run.do_step1(pdb)
+        sleep(2)
         step1_d = log_parser.info_s1_log(pdb)
+        # print("step1_d from collect info:\n", step1_d)
 
     return prot_d, step1_d
 
 
 def get_pdb_report_lines(pdbid: str, prot_d: dict, s1_d: Union[dict, None]) -> str:
-    """Return the report lines for a pdbid for the two subsections in a
-    pdb report with PDBParser info in prot_d and Step1 info in s1_d).
-    Note:
-    The input dictionaries are assumed to be the values of the
-    complete dict 'filtered' by pdbid, the top level key, e.g.:
-        prot_d = prot_info_d[pdbid]
+    """Return the formated report lines for a pdbid for the two subsections
+    in a pdb report with PDBParser info in prot_d and Step1 info in s1_d).
+    Args:
+      pdbid (str): The pdb id.
+      prot_d (dict): The dictionary of sections from bio parser.
+      s1_d ([dict, None]): The dictionary of sections from step1 log parser.
     """
 
     if s1_d is None:
@@ -72,7 +75,13 @@ def get_pdb_report_lines(pdbid: str, prot_d: dict, s1_d: Union[dict, None]) -> s
         dict_lst = [prot_d, s1_d]
 
     report = f"---\n# {pdbid}\n"
+    name = dict_lst[0].get("Name")
+    if name is not None:
+        report = f"---\n# {pdbid} :: {name}\n"
+        _ = dict_lst[0].pop("Name")
+
     for i, subd in enumerate(dict_lst):
+        # k0: section hdrs, ParsedStructure or MCCE.Step1
         k0 = list(subd.keys())[0]  # section hdrs: bioparser or mcce
 
         report = report + f"## {k0}\n"
@@ -84,7 +93,7 @@ def get_pdb_report_lines(pdbid: str, prot_d: dict, s1_d: Union[dict, None]) -> s
             report = report + f"### {k}\n"
             for val in subd[k0][k]:
                 if i == 0 and k == "Warnings":
-                    report = report + f"  - <strong><font color='red'>{val}</font> </strong>\n"
+                    report = report + f"  * <strong><font color='red'>{val}</font> </strong>\n"
                     d = subd[k0][k][val]
                     for w in d:
                         report = report + f"    - {w}: {d[w]}\n"
@@ -92,8 +101,13 @@ def get_pdb_report_lines(pdbid: str, prot_d: dict, s1_d: Union[dict, None]) -> s
                 elif i == 1 and isinstance(val, str) and val.startswith("Generic"):
                     report = report + f"  - <strong><font color='red'>{val}</font> </strong>\n"
 
-                elif i == 1 and k == "Distance Clashes:":
-                    report = report + f"{val}\n"
+                elif i == 1 and k == "Distance Clashes":
+                    if i == 1 and isinstance(val, str) and val.startswith("Clashes"):
+                        report = report + f"<details><summary>{val}</summary>\n"
+                    elif i == 1 and isinstance(val, str) and val.endswith("end_clash"):
+                        report = report + "</details>\n"
+                    else:
+                        report = report + f"  {val}\n"
 
                 elif isinstance(val, tuple) or isinstance(val, list):
                     ter, lst = val
@@ -116,6 +130,6 @@ def collect_info_lines(prot_d: dict, s1_d: Union[dict, None]) -> str:
         if s1_d is not None:
             rpt_lines = rpt_lines + get_pdb_report_lines(pdb, prot_d[pdb], s1_d[pdb])
         else:
-            rpt_lines = rpt_lines + get_pdb_report_lines(pdb, prot_d[pdb], s1_d)
+            rpt_lines = rpt_lines + get_pdb_report_lines(pdb, prot_d[pdb], None)
 
     return rpt_lines

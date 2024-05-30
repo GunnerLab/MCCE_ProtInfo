@@ -12,7 +12,12 @@ from collections import defaultdict
 from dataclasses import dataclass
 import pandas as pd
 from pathlib import Path
+import logging
 from typing import Union
+
+
+logger = logging.getLogger(__name__)
+# logger.setLevel(logging.WARNING)
 
 
 def extract_content_between_tags(text: str, tag1: str, tag2: str = "   Done") -> str:
@@ -110,14 +115,14 @@ def get_log1_specs(loghdrs: list) -> dict:
             all[i] = LogHdr(
                 i,
                 hdr,
-                rpt_hdr="Renamed:",
+                rpt_hdr="Renamed",
                 line_start="   Renaming ",
             )
         elif i == 2:
             all[i] = LogHdr(
                 i,
                 hdr,
-                rpt_hdr="Termini:",
+                rpt_hdr="Termini",
                 line_start="      Labeling ",
             )
         elif i == 3:
@@ -131,7 +136,7 @@ def get_log1_specs(loghdrs: list) -> dict:
             all[i] = LogHdr(
                 i,
                 hdr,
-                rpt_hdr="Labeling:",
+                rpt_hdr="Labeling",
                 line_start="      Labeling ",
                 skip_lines=b3_exclude,
             )
@@ -140,13 +145,13 @@ def get_log1_specs(loghdrs: list) -> dict:
             all[i] = LogHdr(
                 i,
                 hdr,
-                rpt_hdr="Load Structure:",
+                rpt_hdr="Load Structure",
             )
         elif i == 5:
             all[i] = LogHdr(
                 i,
                 hdr,
-                rpt_hdr="Free Cofactors:",
+                rpt_hdr="Free Cofactors",
                 skip_lines=(
                     "free cofactors were stripped off in this round",
                     "saved in debug.log.",
@@ -156,7 +161,7 @@ def get_log1_specs(loghdrs: list) -> dict:
             all[i] = LogHdr(
                 i,
                 hdr,
-                rpt_hdr="Missing Heavy Atoms:",
+                rpt_hdr="Missing Heavy Atoms",
                 line_start="   Missing heavy atom  ",
                 skip_lines=["   Missing heavy atoms detected."],
             )
@@ -164,20 +169,20 @@ def get_log1_specs(loghdrs: list) -> dict:
             all[i] = LogHdr(
                 i,
                 hdr,
-                rpt_hdr="Distance Clashes:",
+                rpt_hdr="Distance Clashes",
             )
         elif i == 8:
             all[i] = LogHdr(
                 i,
                 hdr,
-                rpt_hdr="Connectivity:",
+                rpt_hdr="Connectivity",
             )
         else:
             # unknown
             all[i] = LogHdr(
                 i,
                 hdr,
-                rpt_hdr="Other:",
+                rpt_hdr="Other",
             )
 
     return dict(all)
@@ -192,10 +197,10 @@ class RunLog1:
     """
 
     def __init__(self, pdb: Path) -> None:
-        self.pdb = pdb
+        self.pdb = pdb.resolve()
         self.pdbid = self.pdb.stem
         self.s1_dir = self.pdb.parent.joinpath("step1_run")
-        # id of block with debug.log mentions:
+        # id of block with debug.log mentions, if any:
         self.check_debuglog_idx = [5]
         self.txt_blocks = self.get_blocks()
 
@@ -232,6 +237,9 @@ class RunLog1:
                     else:
                         pchem = get_pubchem_compound_link(conf)
                     newtpl.append(f"{conf}::  {pchem}")
+
+                # TODO
+                # elif line.startswith("   Error! The following atoms of residue"):
 
             if loghdr.idx == 5:
                 # flag if 'debug.log' found in line:
@@ -270,7 +278,7 @@ class RunLog1:
 
         return out
 
-    def get_blocks(self):
+    def get_blocks(self) -> dict:
         """Extract 'processing blocks' from run.log file."""
 
         with open(self.s1_dir.joinpath("run.log")) as fp:
@@ -286,7 +294,9 @@ class RunLog1:
 
             if (lhdr.line_start is not None) or (lhdr.skip_lines is not None):
                 content = self.process_content_block(content, lhdr)
-
+            # debug
+            if k == 6:
+                print("get_blocks, k=6 contents:\n{content}")
             block_txt[rpt_k] = [line for line in content if line.strip()]
 
         # process termini; group res into NTR, CTR
@@ -307,25 +317,26 @@ class RunLog1:
                 block_txt[rk].append(line)
 
         # collapse dist clashes block 7:
-        if block_txt["Distance Clashes:"]:
+        if block_txt["Distance Clashes"]:
             new7 = []
-            new7.append("<details><summary>Clashes found</summary>\n")
-            for d in block_txt["Distance Clashes:"]:
-                new7.append(f"  - {d}")
-            new7.append("</details>")
-            block_txt["Distance Clashes:"] = new7
+            new7.append("Clashes found")
+            for d in block_txt["Distance Clashes"]:
+                new7.append(d.strip())
+            new7.append("end_clash")  # tag for formatting section
+
+            block_txt["Distance Clashes"] = new7
 
         return block_txt
 
 
 def filter_heavy_atm_section(pdb: Path, s1_info_d: dict) -> dict:
-    """Process the 'Missing Heavy Atoms:' section to remove
+    """Process the 'Missing Heavy Atoms' section to remove
     lines for missing backbone atoms of terminal residues.
     """
 
-    # term values: [2-tuples]
-    term = s1_info_d[pdb.stem]["MCCE.Step1"]["Termini:"]
-    heavy = s1_info_d[pdb.stem]["MCCE.Step1"]["Missing Heavy Atoms:"]
+    # term values are [2-tuples]
+    term = s1_info_d[pdb.stem]["MCCE.Step1"]["Termini"]
+    heavy = s1_info_d[pdb.stem]["MCCE.Step1"]["Missing Heavy Atoms"]
     if len(heavy) > 1:
         _ = heavy.pop(-1)
         # == Ignore warning messages if they are in the terminal residues
@@ -338,7 +349,7 @@ def filter_heavy_atm_section(pdb: Path, s1_info_d: dict) -> dict:
             continue
         hvy_lst.append(line)
     # update dict
-    s1_info_d[pdb.stem]["MCCE.Step1"]["Missing Heavy Atoms:"] = hvy_lst
+    s1_info_d[pdb.stem]["MCCE.Step1"]["Missing Heavy Atoms"] = hvy_lst
 
     return s1_info_d
 
