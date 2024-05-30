@@ -59,6 +59,12 @@ ProtInfo = "protinfo.cli:prot_info_cli"
 local_scheme = "no-local-version"  # required for PyPI and TestPyPI
 version_file = "protinfo/_version.py"
 
+[tool.pytest.ini_options]
+filterwarnings = [
+    "error",
+    "ignore::UserWarning",
+]
+
 [flake8]
 ignore = ['E203', 'E266', 'E501', 'W503']
 max-line-length = 120
