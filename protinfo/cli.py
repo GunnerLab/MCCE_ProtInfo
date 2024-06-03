@@ -5,21 +5,31 @@ Command line interface for the MCCE ProtInfo tool, which gathers:
  * Info about the input protein from Bio.PDB parser.
  * Info from MCCE step1 run.log & debug.log when step1 can be run.
 
-This is the 'main' module for the cli, which call the function
+This is the 'main' module for the cli, which calls the function
 that outputs a single protein report: `get_single_pdb_report(args)`.
 
 Options:
  1. pdb (required): a pdb file name or pdbid (assumed valid).
  2. --fetch (False if not used): If 'pdb' is a pdbid and flag is used,
     the biological assembly is downloaded from rcsb.org.
+ Step1 options:
+  --wet (False): Keep water molecules.
+  --noter (False): Do not label terminal residues (for making ftpl).
+  -d (4.0): Protein dielectric constant for delphi.
+  -u (''): User selected, comma-separated KEY=var pairs from run.prm; e.g.:
+           -u HOME_MCCE=/path/to/mcce_home,EXTRA=./extra.tpl.
+  -e (mcce): mcce executable location.
+  -h, --help  Show this help message and exit.
+  --fetch     Download the biological assembly of given pdb (if not a file).
 
 Usage:
  >ProtInfo 1fat --fetch
- >ProtInfo 1fat.pdb
+ >ProtInfo 1fat.pdb --noter
 """
 
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter, Namespace
+from IPython.core.formatters import format_display_data
 import logging
 from pathlib import Path
 from protinfo import info, io_utils as iou
@@ -42,6 +52,16 @@ ERR_MISSING_FETCH_FLAG = """
 The input pdb ({}) seems to be a pdbid. To download its
 biological assembly, add --fetch at the command line.
 """
+
+
+def args_to_str(cliname: str, args: Namespace) -> str:
+    """Return cli args to string.
+    Note: Using format_display_data to obtain output
+    as in a notebookk where the 'func' object ref is
+    in readeable form instead of uid.
+    """
+
+    return f"{cliname} args:\n{format_display_data(vars(args))[0]['text/plain']}\n"
 
 
 def validate_pdb_inputs(args: Namespace) -> Union[Path, str, None]:
@@ -177,6 +197,7 @@ def prot_info_cli(argv=None):
         logger.error("No input: you must provide a pdbid or a pdb filename.")
         sys.exit("No input: you must provide a pdbid or a pdb filename.")
 
+    logger.info(args_to_str(CLI_NAME, args))
     get_single_pdb_report(args)
 
     rpt_fp = Path("ProtInfo.md")
