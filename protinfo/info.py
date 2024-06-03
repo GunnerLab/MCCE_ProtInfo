@@ -95,8 +95,13 @@ def get_pdb_report_lines(pdbid: str, prot_d: dict, s1_d: Union[dict, None]) -> s
             if not subd[h2][k]:
                 continue
 
-            if k in ["Chains", "Residues", "Waters", "Waters, buried"]:
-                report = report + f"### {k}: "
+            if k in ["Chains", "Residues", "Waters", "Buried"]:
+                # "Waters, buried", "Heteros, buried"]:
+                # if k.endswith("buried"):
+                if k == "Buried":
+                    report = report + f"### {k} ({bio_parser.BURIED_THRESH:.0%} thresh.):\n"
+                else:
+                    report = report + f"### {k}: "
             else:
                 report = report + f"### {k}:\n"
 
@@ -119,9 +124,19 @@ def get_pdb_report_lines(pdbid: str, prot_d: dict, s1_d: Union[dict, None]) -> s
                     else:
                         report = report + f"  {val}\n"
 
-                elif isinstance(val, tuple) or isinstance(val, list):
+                elif i == 0 and k == "Buried":
+                    for d in val:
+                        n, ids = val[d]
+                        report = report + f"  - <strong>{d}</strong>: {n}: {', '.join(x for x in ids)}\n"
+
+                elif isinstance(val, tuple):
                     ter, lst = val
                     report = report + f"  <strong>{ter}</strong>: {', '.join(lst)}\n"
+
+                elif isinstance(val, list):
+                    ter, lst = val
+                    report = report + f"  <strong>{ter}</strong>: {', '.join(x for x in lst)}\n"
+
                 else:
                     report = report + f"  {val}\n"
 

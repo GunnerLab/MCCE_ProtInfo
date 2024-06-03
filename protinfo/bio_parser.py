@@ -30,7 +30,9 @@ ERR_MULTI_MODELS = "MCCE cannot handle multi-model proteins."
 ERR_TRUNCATED_CONVERSION = """
 This pdb was truncated during the .cif to .pdb format conversion
 because the number of atoms exceeds 99,999."""
-BURIED_THRESH = 0.35  # res with sasa < this are buried.
+
+# ref: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7817970/
+BURIED_THRESH = 0.20  # res with sasa < this are buried.
 
 
 def process_warnings(w: PDBConstructionWarning) -> dict:
@@ -117,9 +119,13 @@ def info_input_prot(pdb: Path) -> dict:
         n_chains = len(chains)
         n_res = 0
         n_hoh = 0
+        n_het = 0
         cnames = []
         waters = []
-        buried = []
+        buried_wat = []
+        heteros = []
+        buried_het = []
+
         for c in chains:
             cname = c.get_id()
             cnames.append(cname)
@@ -128,11 +134,18 @@ def info_input_prot(pdb: Path) -> dict:
 
             res = list(c.get_residues())
             n_res += len(res)
+            heteros = [r for r in res if r.get_id()[0].startswith("H_")]
+            for het in heteros:
+                if het.sasa < BURIED_THRESH:
+                    hetid = het.get_id()
+                    buried_het.append(f"{c.id} {hetid[0][2:]} {hetid[1]}")
+            n_het += len(heteros)
+
             waters = [r for r in res if r.resname.strip() == "HOH"]
             n_hoh += len(waters)
             for wat in waters:
                 if wat.sasa < BURIED_THRESH:
-                    buried.append(f"{c.id} {wat.get_id()[1]}")
+                    buried_wat.append(f"{c.id} {wat.get_id()[1]}")
 
             atoms = c.get_atoms()
             altlocs = []
@@ -154,8 +167,11 @@ def info_input_prot(pdb: Path) -> dict:
         dinner["Chains"].append((n_chains, cnames))
         dinner["Residues"].append(n_res)
         dinner["Waters"].append(n_hoh)
-        if buried:
-            dinner["Waters, buried"].append((len(buried), buried))
+
+        if buried_wat:
+            dinner["Buried"].append({"Waters": (len(buried_wat), buried_wat)})
+        if buried_het:
+            dinner["Buried"].append({"Heteros": (len(buried_het), buried_het)})
 
     if protname is not None:
         dout[pdbid]["Name"] = protname.title()
