@@ -15,6 +15,7 @@ Functions:
 """
 
 from Bio.PDB import PDBParser, parse_pdb_header
+from Bio.PDB.SASA import ShrakeRupley
 from Bio.PDB.PDBExceptions import PDBConstructionWarning
 from collections import Counter, defaultdict
 import logging
@@ -23,13 +24,13 @@ import warnings
 
 
 logger = logging.getLogger(__name__)
-# logger.setLevel(logging.WARNING)
 
 
 ERR_MULTI_MODELS = "MCCE cannot handle multi-model proteins."
 ERR_TRUNCATED_CONVERSION = """
 This pdb was truncated during the .cif to .pdb format conversion
 because the number of atoms exceeds 99,999."""
+BURIED_THRESH = 0.35  # res with sasa < this are buried.
 
 
 def process_warnings(w: PDBConstructionWarning) -> dict:
@@ -97,8 +98,6 @@ def info_input_prot(pdb: Path) -> dict:
 
     pdb_hdr_d = parse_pdb_header(pdb)
     protname = pdb_hdr_d.get("name")
-    # if protname is not None:
-    #    dinner["Name"].append(protname.title())
 
     # check if header has truncation warning:
     note_hdr = pdb_hdr_d.get("head")
@@ -111,11 +110,16 @@ def info_input_prot(pdb: Path) -> dict:
         dinner["MultiModels"].append(n_models)
     else:
         s0 = structure[0]
+        sasa = ShrakeRupley()
+        sasa.compute(s0, level="R")
+
         chains = list(s0.get_chains())
         n_chains = len(chains)
         n_res = 0
         n_hoh = 0
         cnames = []
+        waters = []
+        buried = []
         for c in chains:
             cname = c.get_id()
             cnames.append(cname)
@@ -124,7 +128,11 @@ def info_input_prot(pdb: Path) -> dict:
 
             res = list(c.get_residues())
             n_res += len(res)
-            n_hoh = len([r for r in res if r.resname.strip() == "HOH"])
+            waters = [r for r in res if r.resname.strip() == "HOH"]
+            n_hoh += len(waters)
+            for wat in waters:
+                if wat.sasa < BURIED_THRESH:
+                    buried.append(f"{c.id} {wat.get_id()[1]}")
 
             atoms = c.get_atoms()
             altlocs = []
@@ -146,6 +154,8 @@ def info_input_prot(pdb: Path) -> dict:
         dinner["Chains"].append((n_chains, cnames))
         dinner["Residues"].append(n_res)
         dinner["Waters"].append(n_hoh)
+        if buried:
+            dinner["Waters, buried"].append((len(buried), buried))
 
     if protname is not None:
         dout[pdbid]["Name"] = protname.title()

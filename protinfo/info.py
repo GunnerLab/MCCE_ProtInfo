@@ -95,14 +95,18 @@ def get_pdb_report_lines(pdbid: str, prot_d: dict, s1_d: Union[dict, None]) -> s
             if not subd[h2][k]:
                 continue
 
-            report = report + f"### {k}\n"
+            if k in ["Chains", "Residues", "Waters", "Waters, buried"]:
+                report = report + f"### {k}: "
+            else:
+                report = report + f"### {k}:\n"
+
             for val in subd[h2][k]:
                 if i == 0 and k == "Warnings":
                     warnstr = ""
                     d = subd[h2][k][val]
                     for w in d:
                         warnstr = warnstr + f"{w} ({', '.join(str(i) for i in d[w])}); "
-                    report = report + f"  * <strong><font color='red'>{val}</font></strong>: {warnstr}\n"
+                    report = report + f"  <strong><font color='red'>{val}</font></strong>: {warnstr}\n"
 
                 elif i == 1 and isinstance(val, str) and (val.startswith("Generic") or val.startswith("Unloadable")):
                     report = report + f"  - <strong><font color='red'>{val}</font></strong>:\n"
@@ -117,9 +121,9 @@ def get_pdb_report_lines(pdbid: str, prot_d: dict, s1_d: Union[dict, None]) -> s
 
                 elif isinstance(val, tuple) or isinstance(val, list):
                     ter, lst = val
-                    report = report + f"  <strong>{ter} </strong> : {', '.join(lst)}\n"
+                    report = report + f"  <strong>{ter}</strong>: {', '.join(lst)}\n"
                 else:
-                    report = report + f"  - {val}\n"
+                    report = report + f"  {val}\n"
 
             report = report + "\n"
 
