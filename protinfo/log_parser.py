@@ -291,11 +291,11 @@ class RunLog1:
         # check if new tpl confs:
         if loghdr.idx == 3:
             if newtpl:
-                out.append("Generic topology file created for:")
+                out.append("Generic topology file created for")
                 out.append(newtpl)
 
             if tpl_mismatch:
-                out.append("Unloadable topology:")
+                out.append("Unloadable topology")
                 msg = ""
                 locs = ""
                 fmt = "Atoms of residue {} ({}), do not match the topology conformer {}.\n"

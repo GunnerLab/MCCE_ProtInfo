@@ -92,7 +92,7 @@ def get_single_pdb_report(args: Union[Namespace, dict]):
             logger.error("Could not download from rcsb.org.")
             return
 
-    prot_d, step1_d = info.collect_info(pdb)
+    prot_d, step1_d = info.collect_info(pdb, args)
     report_lines = info.collect_info_lines(prot_d, step1_d)
     iou.save_report(report_lines, pdb_fp=pdb)
 
@@ -111,6 +111,8 @@ def pi_parser():
         prog=f"{CLI_NAME}",
         description=__doc__,
         formatter_class=RawDescriptionHelpFormatter,
+        epilog="""Report issues here:
+        https://github.com/GunnerLab/MCCE_ProtInfo/issues""",
     )
     p.add_argument(
         "pdb",
@@ -123,6 +125,44 @@ def pi_parser():
         default=False,
         action="store_true",
         help="Download the biological assembly of given pdb (if not a file).",
+    )
+
+    s1 = p.add_argument_group("s1", "step1 options")
+    # step1.py prot.pdb {wet} {noter} {d} {u} {e}
+    s1.add_argument(
+        "--wet",
+        default=False,
+        action="store_true",
+        help="Keep water molecules; %(default)s.",
+    )
+    s1.add_argument(
+        "--noter",
+        default=False,
+        action="store_true",
+        help="Do not label terminal residues (for making ftpl); %(default)s.",
+    )
+    s1.add_argument(
+        "-d",
+        metavar="epsilon",
+        type=float,
+        default=4.0,
+        help="protein dielectric constant for delphi; %(default)s.",
+    )
+    s1.add_argument(
+        "-u",
+        metavar="Key=Value",
+        type=str,
+        default="",
+        help="""
+        User selected, comma-separated KEY=var pairs from run.prm; e.g.:
+        -u HOME_MCCE=/path/to/mcce_home,H2O_SASCUTOFF=0.05,EXTRA=./extra.tpl; default: %(default)s.
+        Note: No space after a comma!""",
+    )
+    s1.add_argument(
+        "-e",
+        metavar="/path/to/mcce",
+        default="mcce",
+        help="mcce executable location; default: %(default)s.",
     )
 
     return p

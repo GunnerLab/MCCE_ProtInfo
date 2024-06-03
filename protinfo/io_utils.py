@@ -4,7 +4,7 @@
 Module: io_utils
 """
 
-import Bio.PDB as PDB
+from Bio.PDB import MMCIFParser, PDBIO
 import gzip
 import logging
 from pathlib import Path
@@ -16,7 +16,6 @@ from typing import Tuple, Union
 
 
 logger = logging.getLogger(__name__)
-# logger.setLevel(logging.WARNING)
 
 
 ERR_CALL_NOT_IN_FILE_DIR = """
@@ -115,12 +114,12 @@ def cif2pdb(cif_fp: Path) -> Path:
     protname = get_cif_protname(cif_fp)
     cif_out = f"{cif_fp.name[:4]}.pdb"
 
-    parser = PDB.MMCIFParser(auth_residues=True, QUIET=True)
+    parser = MMCIFParser(auth_residues=True, QUIET=True)
     structure = parser.get_structure("cif", cif_fp)
     N = len(list(structure.get_atoms()))
     too_large = N > 99_999
 
-    io = PDB.PDBIO()
+    io = PDBIO()
     io.set_structure(structure)  # coords only
     with open(cif_out, "w") as fh:
         try:

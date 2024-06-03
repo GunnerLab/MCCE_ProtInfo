@@ -19,6 +19,7 @@ Main steps:
 """
 
 
+from argparse import Namespace
 import logging
 from pathlib import Path
 from protinfo import USER_MCCE, bio_parser, log_parser, run
@@ -30,10 +31,15 @@ logger = logging.getLogger(__name__)
 # logger.setLevel(logging.WARNING)
 
 
-def collect_info(pdb: Path) -> Tuple[dict, Union[dict, None]]:
+def collect_info(pdb: Path, args: Namespace) -> Tuple[dict, Union[dict, None]]:
     """Return at least one dict holding info from Bio.PDB.PDBParser.
     The second dict is None when step1 cannot be run, otherwise
     it contains info from the parsed run.log file.
+    Args:
+      pdb (Path): File path of validated pdb.
+      args (argparse.Namespace): Cli arguments (for creating step1 script).
+    Returns:
+      A 2-tuple of dicts when step1 can run, else (dict1, None).
     """
 
     DO_STEP1 = USER_MCCE is not None
@@ -52,10 +58,9 @@ def collect_info(pdb: Path) -> Tuple[dict, Union[dict, None]]:
         DO_STEP1 = False
 
     if DO_STEP1:
-        run.do_step1(pdb)
+        run.do_step1(pdb, args)
         sleep(2)
         step1_d = log_parser.info_s1_log(pdb)
-        # print("step1_d from collect info:\n", step1_d)
 
     return prot_d, step1_d
 
@@ -96,7 +101,7 @@ def get_pdb_report_lines(pdbid: str, prot_d: dict, s1_d: Union[dict, None]) -> s
                     warnstr = ""
                     d = subd[h2][k][val]
                     for w in d:
-                        warnstr = warnstr + f"{w} ({", ".join(str(i) for i in d[w])}); "
+                        warnstr = warnstr + f"{w} ({', '.join(str(i) for i in d[w])}); "
                     report = report + f"  * <strong><font color='red'>{val}</font></strong>: {warnstr}\n"
 
                 elif i == 1 and isinstance(val, str) and (val.startswith("Generic") or val.startswith("Unloadable")):

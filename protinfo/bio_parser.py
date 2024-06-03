@@ -14,8 +14,7 @@ Functions:
  feat: Get neighbors of HETATMs not waters.
 """
 
-
-import Bio.PDB
+from Bio.PDB import PDBParser, parse_pdb_header
 from Bio.PDB.PDBExceptions import PDBConstructionWarning
 from collections import Counter, defaultdict
 import logging
@@ -78,12 +77,10 @@ def info_input_prot(pdb: Path) -> dict:
     a warnings section if any.
     """
 
-    parser = Bio.PDB.PDBParser()
-
+    pdbid = pdb.stem
+    parser = PDBParser()
     dout = defaultdict(dict)
     dinner = defaultdict(list)
-
-    pdbid = pdb.stem
 
     try:
         with warnings.catch_warnings(record=True) as w:
@@ -98,7 +95,7 @@ def info_input_prot(pdb: Path) -> dict:
         logger.error(f"ERROR: {ex.args} - (Possibly not biopython related.)")
         return dict(dout)
 
-    pdb_hdr_d = Bio.PDB.parse_pdb_header(pdb)
+    pdb_hdr_d = parse_pdb_header(pdb)
     protname = pdb_hdr_d.get("name")
     # if protname is not None:
     #    dinner["Name"].append(protname.title())

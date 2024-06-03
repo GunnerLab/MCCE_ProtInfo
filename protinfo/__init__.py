@@ -25,5 +25,5 @@ logging.basicConfig(
     filename="protinfo.log",
     encoding="utf-8",
 )
-rootlog = logging.getLogger()
-rootlog.info(f"ProtInfo version :{_version.version_tuple}")
+logger = logging.getLogger("ProtInfo")
+logger.info(f"Version :{_version.version_tuple}")
