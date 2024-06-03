@@ -81,25 +81,26 @@ def get_pdb_report_lines(pdbid: str, prot_d: dict, s1_d: Union[dict, None]) -> s
         _ = dict_lst[0].pop("Name")
 
     for i, subd in enumerate(dict_lst):
-        # k0: section hdrs, ParsedStructure or MCCE.Step1
-        k0 = list(subd.keys())[0]  # section hdrs: bioparser or mcce
+        # h2: section hdrs, ParsedStructure or MCCE.Step1
+        h2 = list(subd.keys())[0]  # section hdrs: bioparser or mcce
 
-        report = report + f"## {k0}\n"
+        report = report + f"## {h2}\n"
 
-        for k in subd[k0]:
-            if not subd[k0][k]:
+        for k in subd[h2]:
+            if not subd[h2][k]:
                 continue
 
             report = report + f"### {k}\n"
-            for val in subd[k0][k]:
+            for val in subd[h2][k]:
                 if i == 0 and k == "Warnings":
-                    report = report + f"  * <strong><font color='red'>{val}</font> </strong>\n"
-                    d = subd[k0][k][val]
+                    warnstr = ""
+                    d = subd[h2][k][val]
                     for w in d:
-                        report = report + f"    - {w}: {d[w]}\n"
+                        warnstr = warnstr + f"{w} ({", ".join(str(i) for i in d[w])}); "
+                    report = report + f"  * <strong><font color='red'>{val}</font></strong>: {warnstr}\n"
 
-                elif i == 1 and isinstance(val, str) and val.startswith("Generic"):
-                    report = report + f"  - <strong><font color='red'>{val}</font> </strong>\n"
+                elif i == 1 and isinstance(val, str) and (val.startswith("Generic") or val.startswith("Unloadable")):
+                    report = report + f"  - <strong><font color='red'>{val}</font></strong>:\n"
 
                 elif i == 1 and k == "Distance Clashes":
                     if i == 1 and isinstance(val, str) and val.startswith("Clashes"):
@@ -111,7 +112,7 @@ def get_pdb_report_lines(pdbid: str, prot_d: dict, s1_d: Union[dict, None]) -> s
 
                 elif isinstance(val, tuple) or isinstance(val, list):
                     ter, lst = val
-                    report = report + f"  * <strong>{ter} </strong> : {', '.join(lst)}\n"
+                    report = report + f"  <strong>{ter} </strong> : {', '.join(lst)}\n"
                 else:
                     report = report + f"  - {val}\n"
 

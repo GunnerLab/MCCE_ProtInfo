@@ -81,7 +81,7 @@ def get_path_keys(pdb: Path) -> Union[dict, None]:
     ["topology files","renaming file"].
     """
     d = {}
-    desc = ["topology files", "renaming file"]
+    desc = ["topologies", "renaming file"]
     runrec = pdb.parent.joinpath("step1_run", "run.prm.record")
     if not runrec.exists():
         logger.error("Not found: run.prm.record")

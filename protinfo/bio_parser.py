@@ -47,10 +47,10 @@ def process_warnings(w: PDBConstructionWarning) -> dict:
         # extract str past "WARNING: ":
         line = info.message.args[0].removeprefix("WARNING: ")
 
-        if line.startswith("Chain"):
-            newl = line[:-1].replace(" is discontinuous at ", "").split("line")
-            # chn_d[newl[0]].append("Line" + newl[1])
+        if line.startswith("Chain "):
+            newl = line[6:-1].replace(" is discontinuous at ", "").split("line")
             chn_d[newl[0]].append(int(newl[1]))
+
         elif line.startswith("Ignoring"):
             newl = line.removeprefix("Ignoring unrecognized ").split("at")
             unrec_l.append((newl[0].strip().capitalize(), newl[1].strip().capitalize()))
@@ -60,7 +60,7 @@ def process_warnings(w: PDBConstructionWarning) -> dict:
             miss_l.append(line)
 
     if chn_d:
-        warn_d["Discontinuity"] = dict(chn_d)
+        warn_d["Chain discontinuity"] = dict(chn_d)
     if unrec_l:
         warn_d["Unrecognized records"] = unrec_l
     if neg_l:

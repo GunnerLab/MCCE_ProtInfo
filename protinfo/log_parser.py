@@ -12,6 +12,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 import pandas as pd
 from pathlib import Path
+from protinfo.io_utils import get_path_keys
 import logging
 from typing import Union
 
@@ -20,7 +21,22 @@ logger = logging.getLogger(__name__)
 # logger.setLevel(logging.WARNING)
 
 
-def extract_content_between_tags(text: str, tag1: str, tag2: str = "   Done") -> str:
+def get_pubchem_compound_link(compound_id: str) -> str:
+    """Return the link of the PubChem subtance tab for compound_id.
+    The link is prepended with ":  " as it will follow compound_id
+    in the report line; this saves checking for empty str.
+    """
+    if compound_id:
+        url_fstr = ":  https://pubchem.ncbi.nlm.nih.gov/#query={}&tab=substance"
+        if compound_id.startswith("_"):
+            return url_fstr.format(compound_id[1:])
+        else:
+            return url_fstr.format(compound_id)
+    else:
+        return ""
+
+
+def extract_content_between_tags(text: str, tag1: str, tag2: str = "   Done") -> Union[str, None]:
     """Extracts the content between two string tags in a text.
     Args:
       text: A text.
@@ -28,24 +44,21 @@ def extract_content_between_tags(text: str, tag1: str, tag2: str = "   Done") ->
       tag2: The second tag, default: "   Done".
 
     Returns:
-      A string containing the content between the two headers.
+      A string containing the content between the two tags if both found;
+      A string containing the content from tag1 if tag2 not found;
+      None if tag1 is not found.
     """
 
-    start_pos = text.find(tag1) + len(tag1)
+    pos1 = text.find(tag1)
+    if pos1 == -1:
+        return None
+
+    start_pos = pos1 + len(tag1)
     end_pos = text.find(tag2, start_pos)
-
-    return text[start_pos:end_pos]
-
-
-def get_pubchem_compound_link(compound_id: str) -> str:
-    """Return the unvalidated link of the PubChem page for compund_id.
-    subtance tab
-    """
-    if compound_id:
-        url_fstr = "https://pubchem.ncbi.nlm.nih.gov/#query={}&tab=substance"
-        return url_fstr.format(compound_id.upper())
+    if end_pos != -1:
+        return text[start_pos:end_pos]
     else:
-        return ""
+        return text[start_pos:]
 
 
 @dataclass
@@ -126,19 +139,19 @@ def get_log1_specs(loghdrs: list) -> dict:
                 line_start="      Labeling ",
             )
         elif i == 3:
-            b3_exclude = (
-                "   Creating temporary parameter file for unrecognized residue...",
-                "   Trying labeling again...",
-                "   Try delete this entry and run MCCE again",
-                "   Error! premcce_confname()",
-                " is already loaded somewhere else.",
-            )
             all[i] = LogHdr(
                 i,
                 hdr,
                 rpt_hdr="Labeling",
                 line_start="      Labeling ",
-                skip_lines=b3_exclude,
+                skip_lines=(
+                    "Creating temporary parameter file for unrecognized",
+                    "Trying labeling again",
+                    "Try delete this entry and run MCCE again",
+                    "Error! premcce_confname()",
+                    "STOP",
+                    "is already loaded somewhere else.",
+                ),
             )
         elif i == 4:
             # keep as is until error found
@@ -213,16 +226,17 @@ class RunLog1:
 
         return txt
 
-    @staticmethod
-    def process_content_block(content: list, loghdr: LogHdr) -> list:
+    def process_content_block(self, content: list, loghdr: LogHdr) -> list:
         out = []
         skip = loghdr.skip_lines is not None
         change = loghdr.line_start is not None
         newtpl = None
+        tpl_mismatch = None
+        tpl_err = "   Error! The following atoms of residue "
 
         # section that lists new.tpl creation:
         if loghdr.idx == 3:
-            newtpl = []
+            newtpl = ""
 
         for line in content:
             if not line:
@@ -232,14 +246,18 @@ class RunLog1:
                 if line.startswith("   Error! premcce_confname()"):
                     # add conf name & link:
                     conf = line.rsplit(maxsplit=1)[1]
-                    if conf.startswith("_"):
-                        pchem = get_pubchem_compound_link(conf[1:])
-                    else:
-                        pchem = get_pubchem_compound_link(conf)
-                    newtpl.append(f"{conf}::  {pchem}")
+                    newtpl += f"{conf}{get_pubchem_compound_link(conf)}; "
 
-                # TODO
-                # elif line.startswith("   Error! The following atoms of residue"):
+                elif line.startswith(tpl_err):
+                    if tpl_mismatch is None:
+                        tpl_mismatch = defaultdict(list)
+
+                    res_info, tpl_conf = line.removeprefix(tpl_err).split(" can not be loaded to conformer type ")
+                    res, resloc = res_info.split(maxsplit=1)
+                    tpl_mismatch[(res, tpl_conf.strip())].append(resloc)
+                    continue
+                elif line.startswith("           ") and tpl_mismatch is not None:
+                    continue
 
             if loghdr.idx == 5:
                 # flag if 'debug.log' found in line:
@@ -271,10 +289,25 @@ class RunLog1:
             out.append(line)
 
         # check if new tpl confs:
-        if loghdr.idx == 3 and newtpl:
-            out.append("Generic topology file created for:")
-            for t in newtpl:
-                out.append(t)
+        if loghdr.idx == 3:
+            if newtpl:
+                out.append("Generic topology file created for:")
+                out.append(newtpl)
+
+            if tpl_mismatch:
+                out.append("Unloadable topology:")
+                msg = ""
+                locs = ""
+                fmt = "Atoms of residue {} ({}), do not match the topology conformer {}.\n"
+                for k in tpl_mismatch:
+                    locs = ", ".join(lx for lx in tpl_mismatch[k])
+                    msg = msg + fmt.format(k[0], locs, k[1])
+
+                d = get_path_keys(self.pdb)
+                msg = msg + " Likely cause: the renaming file (path: " + d["renaming file"]
+                msg = msg + ") is missing entries for these species, resulting in unloadable"
+                msg = msg + " topology files (path: " + d["topologies"] + "/)."
+                out.append(msg)
 
         return out
 
@@ -288,27 +321,31 @@ class RunLog1:
         for k in blocks_specs:
             lhdr = blocks_specs[k]
             rpt_k = lhdr.rpt_hdr
-            content = extract_content_between_tags(text, lhdr.hdr).splitlines()
+            content = extract_content_between_tags(text, lhdr.hdr)
+            if content is None:
+                continue
+            else:
+                content = content.splitlines()
+
             if k == 1:
                 content = sorted(content)
 
             if (lhdr.line_start is not None) or (lhdr.skip_lines is not None):
                 content = self.process_content_block(content, lhdr)
-            # debug
-            if k == 6:
-                print("get_blocks, k=6 contents:\n{content}")
+
             block_txt[rpt_k] = [line for line in content if line.strip()]
 
         # process termini; group res into NTR, CTR
         b2_hdr = blocks_specs[2].rpt_hdr
-        if block_txt[b2_hdr]:
-            termi = defaultdict(list)
-            for line in block_txt[b2_hdr]:
-                i = line.index('"', 3) + 1
-                termi[line[-3:]].append(line[:i])
-            block_txt[b2_hdr] = []
-            for k in termi:
-                block_txt[b2_hdr].append((k, termi[k]))
+        if block_txt.get(b2_hdr) is not None:
+            if block_txt[b2_hdr]:
+                termi = defaultdict(list)
+                for line in block_txt[b2_hdr]:
+                    i = line.index('"', 3) + 1
+                    termi[line[-3:]].append(line[:i])
+                block_txt[b2_hdr] = []
+                for k in termi:
+                    block_txt[b2_hdr].append((k, termi[k]))
 
         if blocks_specs[5].debuglog:
             # add extra line for each species found:
@@ -317,14 +354,15 @@ class RunLog1:
                 block_txt[rk].append(line)
 
         # collapse dist clashes block 7:
-        if block_txt["Distance Clashes"]:
-            new7 = []
-            new7.append("Clashes found")
-            for d in block_txt["Distance Clashes"]:
-                new7.append(d.strip())
-            new7.append("end_clash")  # tag for formatting section
+        if block_txt.get("Distance Clashes") is not None:
+            if block_txt["Distance Clashes"]:
+                new7 = []
+                new7.append("Clashes found")
+                for d in block_txt["Distance Clashes"]:
+                    new7.append(d.strip())
+                new7.append("end_clash")  # tag for formatting section
 
-            block_txt["Distance Clashes"] = new7
+                block_txt["Distance Clashes"] = new7
 
         return block_txt
 
@@ -334,9 +372,15 @@ def filter_heavy_atm_section(pdb: Path, s1_info_d: dict) -> dict:
     lines for missing backbone atoms of terminal residues.
     """
 
-    # term values are [2-tuples]
-    term = s1_info_d[pdb.stem]["MCCE.Step1"]["Termini"]
-    heavy = s1_info_d[pdb.stem]["MCCE.Step1"]["Missing Heavy Atoms"]
+    # termi values are [2-tuples]
+    termi = s1_info_d[pdb.stem]["MCCE.Step1"].get("Termini")
+    heavy = s1_info_d[pdb.stem]["MCCE.Step1"].get("Missing Heavy Atoms")
+    if heavy is None:
+        return s1_info_d
+
+    if termi is None:
+        return s1_info_d
+
     if len(heavy) > 1:
         _ = heavy.pop(-1)
         # == Ignore warning messages if they are in the terminal residues
@@ -345,9 +389,10 @@ def filter_heavy_atm_section(pdb: Path, s1_info_d: dict) -> dict:
     for line in heavy:
         conf, res = line.split(" in ")
         is_bkb = conf.rsplit(maxsplit=1)[1].endswith("BK")
-        if is_bkb and (res in T[1] for T in term):
+        if is_bkb and (res in T[1] for T in termi):
             continue
         hvy_lst.append(line)
+
     # update dict
     s1_info_d[pdb.stem]["MCCE.Step1"]["Missing Heavy Atoms"] = hvy_lst
 
