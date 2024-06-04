@@ -148,7 +148,7 @@ def pi_parser():
     )
 
     s1 = p.add_argument_group("s1", "step1 options")
-    # step1.py prot.pdb {wet} {noter} {d} {u} {e}
+    # step1.py prot.pdb {wet}{noter}{d}{u}{e}
     s1.add_argument(
         "--wet",
         default=False,
