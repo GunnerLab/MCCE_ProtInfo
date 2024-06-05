@@ -3,16 +3,6 @@
 from protinfo import _version
 import logging
 import shutil
-import warnings
-
-
-NO_MCCE_MSG = """The mcce executable was not found.
-The ProtInfo report will not include any information or diagnostics
-from MCCE step1.py."""
-
-USER_MCCE = shutil.which("mcce")
-if USER_MCCE is None:
-    warnings.warn(NO_MCCE_MSG)
 
 
 # Config for root logger:
@@ -27,3 +17,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger("ProtInfo")
 logger.info(f"Version :{_version.version_tuple}")
+
+
+NO_MCCE_MSG = """The mcce executable was not found.
+The ProtInfo report will not include any information or diagnostics
+from MCCE step1.py."""
+
+USER_MCCE = shutil.which("mcce")
+if USER_MCCE is None:
+    print(NO_MCCE_MSG)
+    logger.warning(NO_MCCE_MSG)
