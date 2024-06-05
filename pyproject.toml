@@ -38,11 +38,13 @@ classifiers = [
 requires-python = ">=3.10"
 
 dependencies = [
-    "numpy",
     "biopython",
+    "ipykernel",
+    "ipython",
+    "numpy",
     "pandas",
-    "requests",
     "pytest",
+    "requests",
 ]
 
 [project.urls]
