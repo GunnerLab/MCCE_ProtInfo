@@ -23,12 +23,10 @@ from argparse import Namespace
 import logging
 from pathlib import Path
 from protinfo import USER_MCCE, bio_parser, log_parser, run
-from time import sleep
 from typing import Tuple, Union
 
 
 logger = logging.getLogger(__name__)
-# logger.setLevel(logging.WARNING)
 
 
 def collect_info(pdb: Path, args: Namespace) -> Tuple[dict, Union[dict, None]]:
@@ -59,7 +57,6 @@ def collect_info(pdb: Path, args: Namespace) -> Tuple[dict, Union[dict, None]]:
 
     if DO_STEP1:
         run.do_step1(pdb, args)
-        sleep(2)
         step1_d = log_parser.info_s1_log(pdb)
 
     return prot_d, step1_d
@@ -96,8 +93,6 @@ def get_pdb_report_lines(pdbid: str, prot_d: dict, s1_d: Union[dict, None]) -> s
                 continue
 
             if k in ["Chains", "Residues", "Waters", "Buried"]:
-                # "Waters, buried", "Heteros, buried"]:
-                # if k.endswith("buried"):
                 if k == "Buried":
                     report = report + f"### {k} ({bio_parser.BURIED_THRESH:.0%} thresh.):\n"
                 else:
@@ -147,14 +142,13 @@ def get_pdb_report_lines(pdbid: str, prot_d: dict, s1_d: Union[dict, None]) -> s
     return report
 
 
-def collect_info_lines(prot_d: dict, s1_d: Union[dict, None]) -> str:
-    """Transform the info in each dict into printable lines."""
+def collect_info_lines(pdbid: str, prot_d: dict, s1_d: Union[dict, None]) -> str:
+    """Transform the pdbid info in each dict into printable lines."""
 
     rpt_lines = ""
-    for pdb in prot_d:
-        if s1_d is not None:
-            rpt_lines = rpt_lines + get_pdb_report_lines(pdb, prot_d[pdb], s1_d[pdb])
-        else:
-            rpt_lines = rpt_lines + get_pdb_report_lines(pdb, prot_d[pdb], None)
+    if s1_d is not None:
+        rpt_lines = rpt_lines + get_pdb_report_lines(pdbid, prot_d[pdbid], s1_d[pdbid])
+    else:
+        rpt_lines = rpt_lines + get_pdb_report_lines(pdbid, prot_d[pdbid], None)
 
     return rpt_lines

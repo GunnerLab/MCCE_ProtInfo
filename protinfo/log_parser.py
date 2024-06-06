@@ -12,13 +12,14 @@ from collections import defaultdict
 from dataclasses import dataclass
 import pandas as pd
 from pathlib import Path
-from protinfo.io_utils import get_path_keys
+from protinfo.io_utils import get_path_keys, ENV
 import logging
+from time import sleep
 from typing import Union
 
 
 logger = logging.getLogger(__name__)
-# logger.setLevel(logging.WARNING)
+logger.setLevel(logging.DEBUG)
 
 
 def get_pubchem_compound_link(compound_id: str) -> str:
@@ -86,6 +87,7 @@ class LogHdr:
     line_start: Union[None, str] = None
     skip_lines: Union[None, list, tuple] = None
     debuglog: bool = False
+    get_key: str = None
 
     def has_debuglog(self, line: str, calling_key: int = 5) -> bool:
         """Set debuglog proprerty to True if line ends with
@@ -104,26 +106,29 @@ class LogHdr:
         return
 
 
-# list of run.log headers returned by mcce step1:
-runlog1_headers = [
-    "   Rename residue and atom names...",
-    "   Identify NTR and CTR...",
-    "   Label backbone, sidechain and altLoc conformers...",
-    "   Load pdb lines into data structure...",
-    "   Strip free cofactors with SAS >   5%...",  # 5
-    "   Check missing heavy atoms and complete altLoc conformers...",
-    "   Find distance clash (<2.000)...",
-    "   Make connectivity network ...",
-]
-
-
-def get_log1_specs(loghdrs: list) -> dict:
+def get_log1_specs(pdb: Path) -> dict:
     """Return a dict of LogHdr classes for processing step1 sections
     in run.log.
     """
 
+    # list of run.log headers returned by mcce step1:
+    runlog1_headers = [
+        "   Rename residue and atom names...",
+        "   Identify NTR and CTR...",
+        "   Label backbone, sidechain and altLoc conformers...",
+        "   Load pdb lines into data structure...",
+        # 5: dynamic header
+        # "   Strip free cofactors with SAS >  -1%...",
+        # "   Strip free cofactors with SAS >   5%...",
+        "   Strip free cofactors with SAS >  {: .0%}...",
+        "   Check missing heavy atoms and complete altLoc conformers...",
+        # 7: dynamic header
+        "   Find distance clash (<{:.3f})...",
+        "   Make connectivity network ...",
+    ]
+
     all = defaultdict(dict)
-    for i, hdr in enumerate(loghdrs, start=1):
+    for i, hdr in enumerate(runlog1_headers, start=1):
         if i == 1:
             all[i] = LogHdr(
                 i,
@@ -169,6 +174,7 @@ def get_log1_specs(loghdrs: list) -> dict:
                     "free cofactors were stripped off in this round",
                     "saved in debug.log.",
                 ),
+                get_key="H2O_SASCUTOFF",
             )
         elif i == 6:
             all[i] = LogHdr(
@@ -179,11 +185,7 @@ def get_log1_specs(loghdrs: list) -> dict:
                 skip_lines=["   Missing heavy atoms detected."],
             )
         elif i == 7:
-            all[i] = LogHdr(
-                i,
-                hdr,
-                rpt_hdr="Distance Clashes",
-            )
+            all[i] = LogHdr(i, hdr, rpt_hdr="Distance Clashes", get_key="CLASH_DISTANCE")
         elif i == 8:
             all[i] = LogHdr(
                 i,
@@ -201,9 +203,6 @@ def get_log1_specs(loghdrs: list) -> dict:
     return dict(all)
 
 
-blocks_specs = get_log1_specs(runlog1_headers)
-
-
 class RunLog1:
     """A class to parse mcce run.log into sections pertaining to step1, and
     process each one of them into a simplified output.
@@ -213,9 +212,17 @@ class RunLog1:
         self.pdb = pdb.resolve()
         self.pdbid = self.pdb.stem
         self.s1_dir = self.pdb.parent.joinpath("step1_run")
+        self.runprm = self.get_runprm()
+        self.dry_opt = float(self.runprm["H2O_SASCUTOFF"]) == -0.01
         # id of block with debug.log mentions, if any:
         self.check_debuglog_idx = [5]
+        self.blocks_specs = get_log1_specs(pdb)
         self.txt_blocks = self.get_blocks()
+
+    def get_runprm(self) -> dict:
+        env = ENV(self.s1_dir)
+
+        return env.runprm
 
     def get_debuglog_species(self) -> str:
         fp = self.s1_dir.joinpath("debug.log")
@@ -288,6 +295,10 @@ class RunLog1:
 
             out.append(line)
 
+        if loghdr.idx == 5:
+            if self.dry_opt:
+                out.insert(0, "NOTE: Add the '--wet' flag at the command line to keep cofactors.")
+
         # check if new tpl confs:
         if loghdr.idx == 3:
             if newtpl:
@@ -314,13 +325,18 @@ class RunLog1:
     def get_blocks(self) -> dict:
         """Extract 'processing blocks' from run.log file."""
 
-        with open(self.s1_dir.joinpath("run.log")) as fp:
+        log_fp = self.s1_dir.joinpath("run.log")
+        with open(log_fp) as fp:
             text = fp.read()
 
         block_txt = {}
-        for k in blocks_specs:
-            lhdr = blocks_specs[k]
+        for k in self.blocks_specs:
+            lhdr = self.blocks_specs[k]
             rpt_k = lhdr.rpt_hdr
+            if k in [5, 7]:
+                # dynamic headers
+                h = lhdr.hdr
+                lhdr.hdr = h.format(float(self.runprm[lhdr.get_key]))
             content = extract_content_between_tags(text, lhdr.hdr)
             if content is None:
                 continue
@@ -336,7 +352,7 @@ class RunLog1:
             block_txt[rpt_k] = [line for line in content if line.strip()]
 
         # process termini; group res into NTR, CTR
-        b2_hdr = blocks_specs[2].rpt_hdr
+        b2_hdr = self.blocks_specs[2].rpt_hdr
         if block_txt.get(b2_hdr) is not None:
             if block_txt[b2_hdr]:
                 termi = defaultdict(list)
@@ -347,9 +363,9 @@ class RunLog1:
                 for k in termi:
                     block_txt[b2_hdr].append((k, termi[k]))
 
-        if blocks_specs[5].debuglog:
+        if self.blocks_specs[5].debuglog:
             # add extra line for each species found:
-            rk = blocks_specs[5].rpt_hdr
+            rk = self.blocks_specs[5].rpt_hdr
             for line in self.get_debuglog_species().splitlines():
                 block_txt[rk].append(line)
 
@@ -401,6 +417,8 @@ def filter_heavy_atm_section(pdb: Path, s1_info_d: dict) -> dict:
 
 def info_s1_log(pdb: Path) -> dict:
     dout = {}
+    sleep(5)
+
     s1log = RunLog1(pdb)
     # set the section data with dict:
     dout[pdb.stem] = {"MCCE.Step1": s1log.txt_blocks}

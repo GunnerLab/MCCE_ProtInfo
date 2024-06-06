@@ -8,7 +8,7 @@ Functions to launch mcce step1.py
 
 from argparse import Namespace
 import logging
-import protinfo.io_utils as iou
+from protinfo.io_utils import make_executable
 from pathlib import Path
 import shutil
 import subprocess
@@ -86,9 +86,7 @@ def write_script(dest_dirpath: Path, sh_str: str):
     sh_path = dest_dirpath.joinpath("s1.sh")
     with open(sh_path, "w") as fh:
         fh.write(sh_str)
-
-    # make script executable:
-    iou.make_executable(sh_path)
+    make_executable(sh_path)
 
     return
 

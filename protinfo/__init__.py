@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
-from protinfo import _version
 import logging
+from protinfo._version import version_tuple
 import shutil
 
 
@@ -16,12 +16,13 @@ logging.basicConfig(
     encoding="utf-8",
 )
 logger = logging.getLogger("ProtInfo")
-logger.info(f"Version :{_version.version_tuple}")
+logger.info(f"Version :{version_tuple}")
 
 
 NO_MCCE_MSG = """The mcce executable was not found.
 The ProtInfo report will not include any information or diagnostics
 from MCCE step1.py."""
+
 
 USER_MCCE = shutil.which("mcce")
 if USER_MCCE is None:

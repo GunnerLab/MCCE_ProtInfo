@@ -39,7 +39,6 @@ from typing import Union
 
 CLI_NAME = "ProtInfo"
 logger = logging.getLogger(__name__)
-# logger.setLevel(logging.INFO)
 
 
 # error msg as fstring:
@@ -113,7 +112,8 @@ def get_single_pdb_report(args: Union[Namespace, dict]):
             return
 
     prot_d, step1_d = info.collect_info(pdb, args)
-    report_lines = info.collect_info_lines(prot_d, step1_d)
+    # TODO: Add cli args as 1st section/line
+    report_lines = info.collect_info_lines(pdb.stem, prot_d, step1_d)
     iou.save_report(report_lines, pdb_fp=pdb)
 
     return

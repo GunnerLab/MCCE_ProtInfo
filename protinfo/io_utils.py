@@ -16,10 +16,45 @@ from typing import Tuple, Union
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 ERR_CALL_NOT_IN_FILE_DIR = """
 Call ProtInfo from where the pdb resides."""
+
+
+class ENV:
+    def __init__(self, rundir_path: str) -> dict:
+        self.rundir = Path(rundir_path)
+        self.runprm = {}
+        # populate self.runprm dict:
+        self.load_runprm()
+
+    def load_runprm(self):
+        # Only run.prm.record is a valid file for comparing two runs!
+        fp = Path(self.rundir.joinpath("run.prm.record"))
+        if not fp.exists():
+            logger.error(f"Not found: run.prm.record in {self.rundir}")
+            raise FileNotFoundError(f"Not found: run.prm.record in {self.rundir}")
+
+        with open(fp) as fin:
+            lines = fin.readlines()
+
+        for line in lines:
+            entry_str = line.strip().split("#")[0]
+            fields = entry_str.split()
+            if len(fields) > 1:
+                key_str = fields[-1]
+                if key_str[0] == "(" and key_str[-1] == ")":
+                    key = key_str.strip("()").strip()
+                    # inconsistant output in run.prm.record:
+                    if key == "EPSILON_PROT":
+                        value = round(float(fields[0]), 1)
+                    else:
+                        value = fields[0]
+                self.runprm[key] = value
+
+        return
 
 
 def subprocess_run(
@@ -74,7 +109,7 @@ def get_cif_protname(cif_fp: Path):
     return response.stdout.split(maxsplit=1)[1]
 
 
-def get_path_keys(pdb: Path) -> Union[dict, None]:
+def get_path_keys0(pdb: Path) -> Union[dict, None]:
     """
     Return path keys from run.prm.record as a dict with keys:
     ["topology files","renaming file"].
@@ -94,6 +129,15 @@ def get_path_keys(pdb: Path) -> Union[dict, None]:
     d[desc[0]] = d[desc[0]] + "/param"
 
     return d
+
+
+def get_path_keys(runprm: dict) -> Union[dict, None]:
+    """
+    Return path keys from run.prm.record as a dict with keys:
+    ["topology files","renaming file"].
+    """
+
+    return {"topologies": runprm["MCCE_HOME"] + "/param", "renaming file": runprm["RENAME_RULES"]}
 
 
 def cif2pdb(cif_fp: Path) -> Path:
