@@ -42,9 +42,9 @@ logger = logging.getLogger(__name__)
 
 # error msg as fstring:
 ERR_FETCH_EXISTING_FILE = """
-The input pdb ({}) resolves to an existing file: to OVERWRITE it with
-the biological assembly from a fresh download, remove the extension
-OR do not pass the --fetch flag at the command line.
+The pdb ({}) resolves to an existing file: to OVERWRITE it with the
+biological assembly from a fresh download, remove the extension, OR:
+do not pass the --fetch flag at the command line to use the existing file.
 """
 ERR_MISSING_FETCH_FLAG = """
 The input pdb ({}) seems to be a pdbid. To download its
@@ -80,22 +80,23 @@ def check_pdb_arg(input_pdb: str) -> Union[Path, str, Tuple[None, str]]:
     return pdb
 
 
-def validate_pdb_inputs(args: Namespace) -> Union[Path, str, None]:
+def validate_pdb_inputs(args: Namespace) -> Union[Path, str]:
     """Validate args.pdb and args.fetch"""
 
     pdb = check_pdb_arg(args.pdb)
     if isinstance(pdb, tuple):
         # error:
         logger.error(pdb[1])
-        return None
+        sys.exit(pdb[1])
+
     elif isinstance(pdb, str):
         if not args.fetch:
             logger.error(ERR_MISSING_FETCH_FLAG.format(pdb))
-            return None
+            sys.exit(ERR_MISSING_FETCH_FLAG.format(pdb))
     else:
         if args.fetch:
             logger.error(ERR_FETCH_EXISTING_FILE.format(pdb))
-            return None
+            sys.exit(ERR_FETCH_EXISTING_FILE.format(pdb))
 
     return pdb
 
@@ -118,15 +119,11 @@ def get_single_pdb_report(args: Union[Namespace, dict]):
         args = Namespace(**args)
 
     pdb = validate_pdb_inputs(args)
-    if pdb is None:
-        logger.error("Input validation failed.")
-        return
-
     if not isinstance(pdb, Path):
         pdb = iou.get_rcsb_pdb(pdb)
         if not isinstance(pdb, Path):
             logger.error("Could not download from rcsb.org.")
-            return
+            sys.exit("Could not download from rcsb.org.")
 
     prot_d, step1_d = info.collect_info(pdb, args)
 
