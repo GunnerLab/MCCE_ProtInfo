@@ -39,8 +39,6 @@ requires-python = ">=3.10"
 
 dependencies = [
     "biopython",
-    "ipykernel",
-    "ipython",
     "numpy",
     "pandas",
     "pytest",
