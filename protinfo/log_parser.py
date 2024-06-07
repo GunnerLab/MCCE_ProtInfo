@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-MSG_KEEP_WATS = "NOTE: Add the '--wet' option at the command line to keep waters and cofactors."
+MSG_KEEP_WATS = "NOTE: Add the '--wet' option at the command line to keep waters and cofactors.\n"
 
 
 def get_pubchem_compound_link(compound_id: str) -> str:
