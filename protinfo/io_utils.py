@@ -19,10 +19,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-ERR_CALL_NOT_IN_FILE_DIR = """
-Call ProtInfo from where the pdb resides."""
-
-
 class ENV:
     def __init__(self, rundir_path: str) -> dict:
         self.rundir = Path(rundir_path)
@@ -109,28 +105,6 @@ def get_cif_protname(cif_fp: Path):
     return response.stdout.split(maxsplit=1)[1]
 
 
-def get_path_keys0(pdb: Path) -> Union[dict, None]:
-    """
-    Return path keys from run.prm.record as a dict with keys:
-    ["topology files","renaming file"].
-    """
-    d = {}
-    desc = ["topologies", "renaming file"]
-    runrec = pdb.parent.joinpath("step1_run", "run.prm.record")
-    if not runrec.exists():
-        logger.error("Not found: run.prm.record")
-        return None
-
-    cmd = "grep -E 'MCCE_HOME|RENAME_RULES' " + str(runrec)
-    response = subprocess_run(cmd, check=False)
-    for i, line in enumerate(response.stdout.splitlines()):
-        d[desc[i]] = line[:-1].split("(")[0].strip()
-
-    d[desc[0]] = d[desc[0]] + "/param"
-
-    return d
-
-
 def get_path_keys(runprm: dict) -> Union[dict, None]:
     """
     Return path keys from run.prm.record as a dict with keys:
@@ -192,38 +166,6 @@ def insert_pdb_hdr(pdb_from_cif_fp: Path, hdr: str):
     return
 
 
-def file_in_current_dir(fp: Path) -> bool:
-    """Return whether the given file path is in the current directory."""
-
-    return fp.parent == Path.cwd()
-
-
-def check_pdb_arg(input_pdb: str) -> Union[Path, str, Tuple[None, str]]:
-    """Validate input_pdb str, which can be either a pdb id or a pdb file.
-    The tuple output type is used to pass the error message.
-    """
-
-    pdb = Path(input_pdb).resolve()
-    if not pdb.exists():
-        if not pdb.suffix:
-            # if no extension, assume pdbid:
-            s = len(pdb.stem)
-            if s != 4:
-                return None, f"Invalid pdbid length: {s}; 4 expected."
-
-            return input_pdb
-
-        return None, f"File not found: {pdb}"
-
-    if not file_in_current_dir(pdb):
-        return None, ERR_CALL_NOT_IN_FILE_DIR
-
-    if pdb.suffix != ".pdb":
-        return None, f"Not a valid extension: {pdb.suffix}"
-
-    return pdb
-
-
 def save_report(
     report_lines: str,
     pdb_fp: Union[Path, None] = None,
@@ -260,8 +202,9 @@ def save_report(
         # (re)set report_fp
         report_fp = pdb_fp.parent.joinpath("ProtInfo.md")
 
-    with open(report_fp, "w") as fo:
-        fo.writelines(report_lines)
+    report_fp.write_text(report_lines)
+    # with open(report_fp, "w") as fo:
+    #    fo.writelines(report_lines)
 
     return
 
@@ -313,6 +256,7 @@ def get_rcsb_pdb(pdbid: str) -> Union[Path, Tuple[None, str]]:
     # save file:
     with open(pdb_file, "wb") as fo:
         fo.write(content)
+
     logger.info("Download completed.")
 
     if which_ba[1]:

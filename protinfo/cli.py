@@ -29,12 +29,11 @@ Usage:
 
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter, Namespace
-from IPython.core.formatters import format_display_data
 import logging
 from pathlib import Path
-from protinfo import info, io_utils as iou
+from protinfo import cli_opts, info, io_utils as iou
 import sys
-from typing import Union
+from typing import Tuple, Union
 
 
 CLI_NAME = "ProtInfo"
@@ -51,22 +50,40 @@ ERR_MISSING_FETCH_FLAG = """
 The input pdb ({}) seems to be a pdbid. To download its
 biological assembly, add --fetch at the command line.
 """
+ERR_CALL_NOT_IN_FILE_DIR = """
+Call ProtInfo from where the pdb resides."""
 
 
-def args_to_str(cliname: str, args: Namespace) -> str:
-    """Return cli args to string.
-    Note: Using format_display_data to obtain output
-    as in a notebookk where the 'func' object ref is
-    in readeable form instead of uid.
+def check_pdb_arg(input_pdb: str) -> Union[Path, str, Tuple[None, str]]:
+    """Validate input_pdb str, which can be either a pdb id or a pdb file.
+    The tuple output type is used to pass the error message.
     """
 
-    return f"{cliname} args:\n{format_display_data(vars(args))[0]['text/plain']}\n"
+    pdb = Path(input_pdb).resolve()
+    if not pdb.exists():
+        if not pdb.suffix:
+            # if no extension, assume pdbid:
+            s = len(pdb.stem)
+            if s != 4:
+                return None, f"Invalid pdbid length: {s}; 4 expected."
+
+            return input_pdb
+
+        return None, f"File not found: {pdb}"
+
+    if not pdb.parent == Path.cwd():
+        return None, ERR_CALL_NOT_IN_FILE_DIR
+
+    if pdb.suffix != ".pdb":
+        return None, f"Not a valid extension: {pdb.suffix}"
+
+    return pdb
 
 
 def validate_pdb_inputs(args: Namespace) -> Union[Path, str, None]:
     """Validate args.pdb and args.fetch"""
 
-    pdb = iou.check_pdb_arg(args.pdb)
+    pdb = check_pdb_arg(args.pdb)
     if isinstance(pdb, tuple):
         # error:
         logger.error(pdb[1])
@@ -112,8 +129,9 @@ def get_single_pdb_report(args: Union[Namespace, dict]):
             return
 
     prot_d, step1_d = info.collect_info(pdb, args)
-    # TODO: Add cli args as 1st section/line
-    report_lines = info.collect_info_lines(pdb.stem, prot_d, step1_d)
+
+    report_lines = f"---\n{cli_opts}\n"
+    report_lines += info.collect_info_lines(pdb.stem, prot_d, step1_d)
     iou.save_report(report_lines, pdb_fp=pdb)
 
     return
@@ -122,6 +140,9 @@ def get_single_pdb_report(args: Union[Namespace, dict]):
 def arg_valid_pdb_len(p: str) -> Union[None, str]:
     """Return None if pdb is empty str."""
     if not len(p):
+        return None
+    if not p.endswith(".pdb") and len(p) != 4:
+        # pdbid given for fetching -> 4 chars
         return None
     return p
 
@@ -197,13 +218,14 @@ def prot_info_cli(argv=None):
         logger.error("No input: you must provide a pdbid or a pdb filename.")
         sys.exit("No input: you must provide a pdbid or a pdb filename.")
 
-    logger.info(args_to_str(CLI_NAME, args))
+    cli_opts.all = vars(args)
+    logger.info(cli_opts)
+
     get_single_pdb_report(args)
 
     rpt_fp = Path("ProtInfo.md")
     if rpt_fp.exists():
-        with open(rpt_fp) as f:
-            print(f.read())
+        print(rpt_fp.read_text())
 
     return
 

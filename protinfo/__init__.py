@@ -28,3 +28,26 @@ USER_MCCE = shutil.which("mcce")
 if USER_MCCE is None:
     print(NO_MCCE_MSG)
     logger.warning(NO_MCCE_MSG)
+
+
+class Opts:
+    def __init__(self, cli_name: str = "ProtInfo", **kwargs):
+        """Class Opts makes command line options available to all objects."""
+
+        self.cli_name = cli_name
+        self.all = kwargs
+
+    def __str__(self):
+        out = f"{self.cli_name} - User options: "
+        if not self.all:
+            return out + "(not set)"
+
+        for k in self.all:
+            out = out + f"{k}: {self.all[k]!r}; "
+        return out + "\n"
+
+    def __repr__(self):
+        return self.__str__()
+
+
+cli_opts = Opts()

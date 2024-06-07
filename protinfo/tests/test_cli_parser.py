@@ -4,8 +4,8 @@ import pytest
 
 
 class TestPiParser:
-    # Verify that the parser correctly initializes with the program name 'ProtInfo'
     def test_parser_initialization(self):
+        """Verify that the parser correctly initializes with the program name 'ProtInfo'"""
         parser = pi_parser()
         assert parser.prog == "ProtInfo", "The program name should be initialized as 'ProtInfo'"
 
@@ -14,15 +14,22 @@ class TestPiParser:
         with pytest.raises(SystemExit):
             parser.parse_args(["--fetch"])
 
-    # Test with empty string input for 'pdb' to see if it is handled or raises an error
     def test_empty_pdb_input(self):
+        """Test empty string input for 'pdb' to see if it is handled or raises an error"""
         parser = pi_parser()
         with pytest.raises(SystemExit):
             parser.parse_args([])
 
-    # Test with input strings significantly longer than typical use cases
-    def test_long_input_strings_handling(self):
+    def test_long_pdbid(self):
+        """Test input strings significantly longer than allowed."""
         parser = pi_parser()
-        long_input = "A" * 1000
+        long_input = "A" * 10
         args = parser.parse_args([long_input])
-        assert args.pdb == long_input, "The parser should handle extremely long input strings for 'pdb' correctly"
+        assert args.pdb is None, "The parser should return None for pdbid != 4."
+
+    def test_long_pdb_name(self):
+        """Test longname allowed for pdb file passed to pdb."""
+        parser = pi_parser()
+        long_input = "A" * 12 + ".pdb"
+        args = parser.parse_args([long_input])
+        assert args.pdb == long_input, "The parser should return the given pdb file name."

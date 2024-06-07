@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
+MSG_KEEP_WATS = "NOTE: Add the '--wet' option at the command line to keep waters and cofactors."
+
+
 def get_pubchem_compound_link(compound_id: str) -> str:
     """Return the link of the PubChem subtance tab for compound_id.
     The link is prepended with ":  " as it will follow compound_id
@@ -118,8 +121,6 @@ def get_log1_specs(pdb: Path) -> dict:
         "   Label backbone, sidechain and altLoc conformers...",
         "   Load pdb lines into data structure...",
         # 5: dynamic header
-        # "   Strip free cofactors with SAS >  -1%...",
-        # "   Strip free cofactors with SAS >   5%...",
         "   Strip free cofactors with SAS >  {: .0%}...",
         "   Check missing heavy atoms and complete altLoc conformers...",
         # 7: dynamic header
@@ -297,7 +298,7 @@ class RunLog1:
 
         if loghdr.idx == 5:
             if self.dry_opt:
-                out.insert(0, "NOTE: Add the '--wet' flag at the command line to keep cofactors.")
+                out.insert(0, MSG_KEEP_WATS)
 
         # check if new tpl confs:
         if loghdr.idx == 3:
@@ -326,8 +327,7 @@ class RunLog1:
         """Extract 'processing blocks' from run.log file."""
 
         log_fp = self.s1_dir.joinpath("run.log")
-        with open(log_fp) as fp:
-            text = fp.read()
+        text = log_fp.read_text()
 
         block_txt = {}
         for k in self.blocks_specs:

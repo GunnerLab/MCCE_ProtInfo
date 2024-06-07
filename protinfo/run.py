@@ -84,8 +84,8 @@ def write_script(dest_dirpath: Path, sh_str: str):
     """Write an executable bash script to run mcce step1."""
 
     sh_path = dest_dirpath.joinpath("s1.sh")
-    with open(sh_path, "w") as fh:
-        fh.write(sh_str)
+    sh_path.write_text(sh_str)
+
     make_executable(sh_path)
 
     return
