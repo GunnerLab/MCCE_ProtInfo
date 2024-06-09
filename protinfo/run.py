@@ -20,20 +20,16 @@ logger = logging.getLogger(__name__)
 
 CUSTOM_S1_SH = """#!/bin/bash
 
-step1.py prot.pdb {wet}{noter}{d}{e}{u}
+step1.py prot.pdb {dry}{noter}{d}{e}{u}
 """
 
 s1_defaults = {
-    "wet": False,
+    "dry": False,
     "noter": False,
     "d": 4.0,
     "e": "mcce",
     "u": "",
 }
-
-
-# maping of cli arg names to mcce steps args:
-cli_to_mcce_opt = {"wet": "dry"}
 
 
 def cli_args_to_dict(sh_args: Namespace) -> dict:
@@ -56,8 +52,8 @@ def populate_sh_template(job_args: Namespace) -> str:
     # note: trailing spaces needed
 
     # special cases:
-    v = d_args.pop("wet")
-    d_all["wet"] = "" if v else "--dry "
+    v = d_args.pop("dry")
+    d_all["dry"] = "--dry " if v else ""
     v = d_args.pop("noter")
     d_all["noter"] = "--noter " if v else ""
 
@@ -67,7 +63,7 @@ def populate_sh_template(job_args: Namespace) -> str:
         if str(v) == str(s1_defaults[k]):
             d_all[k] = ""
         else:
-            d_all[k] = f"-{cli_to_mcce_opt.get(k, k)} {v} "
+            d_all[k] = f"-{k} {v} "
 
     body = CUSTOM_S1_SH.format(**d_all)
 

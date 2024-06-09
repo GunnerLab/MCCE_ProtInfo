@@ -13,8 +13,8 @@ Options:
  2. --fetch (False if not used): If 'pdb' is a pdbid and flag is used,
     the biological assembly is downloaded from rcsb.org.
  Step1 options:
-  --wet (False): Keep water molecules.
-  --noter (False): Do not label terminal residues (for making ftpl).
+  --dry (False if not used): Keep water molecules.
+  --noter (False if not used): Do not label terminal residues (for making ftpl).
   -d (4.0): Protein dielectric constant for delphi.
   -u (''): User selected, comma-separated KEY=var pairs from run.prm; e.g.:
            -u HOME_MCCE=/path/to/mcce_home,EXTRA=./extra.tpl.
@@ -166,25 +166,19 @@ def pi_parser():
     )
 
     s1 = p.add_argument_group("s1", "step1 options")
-    # step1.py prot.pdb {wet}{noter}{d}{u}{e}
-    s1.add_argument(
-        "--wet",
-        default=False,
-        action="store_true",
-        help="Keep water molecules; %(default)s.",
-    )
-    s1.add_argument(
-        "--noter",
-        default=False,
-        action="store_true",
-        help="Do not label terminal residues (for making ftpl); %(default)s.",
-    )
+    # step1.py prot.pdb {dry}{noter}{d}{u}{e}
     s1.add_argument(
         "-d",
         metavar="epsilon",
         type=float,
         default=4.0,
         help="protein dielectric constant for delphi; %(default)s.",
+    )
+    s1.add_argument(
+        "-e",
+        metavar="/path/to/mcce",
+        default="mcce",
+        help="mcce executable location; default: %(default)s.",
     )
     s1.add_argument(
         "-u",
@@ -197,10 +191,16 @@ def pi_parser():
         Note: No space after a comma!""",
     )
     s1.add_argument(
-        "-e",
-        metavar="/path/to/mcce",
-        default="mcce",
-        help="mcce executable location; default: %(default)s.",
+        "--dry",
+        default=False,
+        action="store_true",
+        help="Remove water molecules; %(default)s.",
+    )
+    s1.add_argument(
+        "--noter",
+        default=False,
+        action="store_true",
+        help="Do not label terminal residues (for making ftpl); %(default)s.",
     )
 
     return p
