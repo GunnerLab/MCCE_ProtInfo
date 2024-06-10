@@ -99,8 +99,24 @@ def run_step1(s1_dir: Path) -> None:
     """Run step1 in s1_dir."""
 
     subprocess.Popen(f"{s1_dir}/s1.sh", cwd=str(s1_dir), close_fds=True, stdout=open(f"{s1_dir}/run.log", "w"))
+    # in bench batch run:
+    # subprocess.Popen(
+    #    f"../{job_script}",
+    #    cwd=f"./{entry.name}",
+    #    close_fds=True,
+    #    stdout=open(f"./{entry.name}/run.log", "w"),
+    #            )
 
     return
+
+
+def already_softlinked(linked_fp: Path, parent_fp: Path) -> bool:
+    """Return True if linked_fp name is same as parent_fp name.
+    Return False if linked_fp is not a symlink or src and dest differ.
+    """
+    if not linked_fp.is_symlink():
+        return False
+    return linked_fp.readlink().name == parent_fp.name
 
 
 def do_step1(pdb_fp: Path, args: Namespace):

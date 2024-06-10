@@ -31,8 +31,11 @@ ERR_TRUNCATED_CONVERSION = """
 This pdb was truncated during the .cif to .pdb format conversion
 because the number of atoms exceeds 99,999."""
 
-# ref: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7817970/
-BURIED_THRESH = 0.20  # res with sasa < this are buried.
+
+BURIED_THRESH = 0.05  # mcce default; res with sasa < this are buried.
+BURIED_THR_MSG = f"(using default mcce SASA threshold of {BURIED_THRESH:.0%}):\n"
+# This ref: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7817970/
+# has benchmarked a SASA threshold of 20%.
 
 
 def process_warnings(w: PDBConstructionWarning) -> dict:
@@ -94,16 +97,17 @@ def info_input_prot(pdb: Path) -> dict:
             structure = parser.get_structure(pdbid, pdb.name)
 
     except Exception as ex:
-        dout[pdbid]["ParsedStructure"] = {"ERROR": ex.args + " (Possibly not biopython related.)"}
+        # dout[pdbid]["ParsedStructure"] = {"ERROR": ex.args + " (Possibly not biopython related.)"}
+        dout["ParsedStructure"] = {"ERROR": ex.args + " (Possibly not biopython related.)"}
         logger.error(f"ERROR: {ex.args} - (Possibly not biopython related.)")
         return dict(dout)
 
     pdb_hdr_d = parse_pdb_header(pdb)
-    protname = pdb_hdr_d.get("name")
+    protname = pdb_hdr_d.get("name")  # == "" if no header
 
     # check if header has truncation warning:
     note_hdr = pdb_hdr_d.get("head")
-    if note_hdr is not None:
+    if note_hdr:
         if "truncated" in note_hdr and note_hdr.endswith("true"):
             dinner["Truncation"].append(f"WARNING: {note_hdr}")
 
@@ -173,11 +177,17 @@ def info_input_prot(pdb: Path) -> dict:
         if buried_het:
             dinner["Buried"].append({"Heteros": (len(buried_het), buried_het)})
 
-    if protname is not None:
-        dout[pdbid]["Name"] = protname.title()
-    dout[pdbid]["ParsedStructure"] = dict(dinner)
+    if protname:
+        # dout[pdbid]["Name"] = f"{pdbid.upper()} :: {protname.title()}"
+        dout["Name"] = f"{pdbid.upper()} :: {protname.title()}"
+    else:
+        dout["Name"] = f"{pdbid.upper()}"
+
+    # dout[pdbid]["ParsedStructure"] = dict(dinner)
+    dout["ParsedStructure"] = dict(dinner)
     if len(w):
         warn_d = process_warnings(w)
-        dout[pdbid]["ParsedStructure"]["Warnings"] = warn_d
+        # dout[pdbid]["ParsedStructure"]["Warnings"] = warn_d
+        dout["ParsedStructure"]["Warnings"] = warn_d
 
     return dict(dout)

@@ -45,14 +45,13 @@ def collect_info(pdb: Path, args: Namespace) -> Tuple[dict, Union[dict, None]]:
 
     # Info from Bio.Parser:
     prot_d = bio_parser.info_input_prot(pdb)
-    pdbid = pdb.stem
     # if multimodels, no need to run step1:
-    if "MultiModels" in prot_d[pdbid]["ParsedStructure"]:
-        prot_d[pdb.stem]["Invalid"] = bio_parser.ERR_MULTI_MODELS
+    if "MultiModels" in prot_d["ParsedStructure"]:
+        prot_d["Invalid"] = bio_parser.ERR_MULTI_MODELS
         DO_STEP1 = False
 
-    if "Truncation" in prot_d[pdbid]["ParsedStructure"]:
-        prot_d[pdb.stem]["Failed conversion"] = bio_parser.ERR_TRUNCATED_CONVERSION
+    if "Truncation" in prot_d["ParsedStructure"]:
+        prot_d["Failed conversion"] = bio_parser.ERR_TRUNCATED_CONVERSION
         DO_STEP1 = False
 
     if DO_STEP1:
@@ -62,11 +61,10 @@ def collect_info(pdb: Path, args: Namespace) -> Tuple[dict, Union[dict, None]]:
     return prot_d, step1_d
 
 
-def get_pdb_report_lines(pdbid: str, prot_d: dict, s1_d: Union[dict, None]) -> str:
+def get_pdb_report_lines(prot_d: dict, s1_d: Union[dict, None]) -> str:
     """Return the formated report lines for a pdbid for the two subsections
     in a pdb report with PDBParser info in prot_d and Step1 info in s1_d).
     Args:
-      pdbid (str): The pdb id.
       prot_d (dict): The dictionary of sections from bio parser.
       s1_d ([dict, None]): The dictionary of sections from step1 log parser.
     """
@@ -76,11 +74,8 @@ def get_pdb_report_lines(pdbid: str, prot_d: dict, s1_d: Union[dict, None]) -> s
     else:
         dict_lst = [prot_d, s1_d]
 
-    report = f"---\n# {pdbid}\n"
-    name = dict_lst[0].get("Name")
-    if name is not None:
-        report = f"---\n# {pdbid} :: {name}\n"
-        _ = dict_lst[0].pop("Name")
+    name = dict_lst[0].pop("Name")
+    report = f"---\n# {name}\n"
 
     for i, subd in enumerate(dict_lst):
         # h2: section hdrs, ParsedStructure or MCCE.Step1
@@ -94,7 +89,7 @@ def get_pdb_report_lines(pdbid: str, prot_d: dict, s1_d: Union[dict, None]) -> s
 
             if k in ["Chains", "Residues", "Waters", "Buried"]:
                 if k == "Buried":
-                    report = report + f"### {k} ({bio_parser.BURIED_THRESH:.0%} thresh.):\n"
+                    report = report + f"### {k} {bio_parser.BURIED_THR_MSG}"
                 else:
                     report = report + f"### {k}: "
             else:
@@ -140,15 +135,3 @@ def get_pdb_report_lines(pdbid: str, prot_d: dict, s1_d: Union[dict, None]) -> s
     report = report + "---\n"
 
     return report
-
-
-def collect_info_lines(pdbid: str, prot_d: dict, s1_d: Union[dict, None]) -> str:
-    """Transform the pdbid info in each dict into printable lines."""
-
-    rpt_lines = ""
-    if s1_d is not None:
-        rpt_lines = rpt_lines + get_pdb_report_lines(pdbid, prot_d[pdbid], s1_d[pdbid])
-    else:
-        rpt_lines = rpt_lines + get_pdb_report_lines(pdbid, prot_d[pdbid], None)
-
-    return rpt_lines

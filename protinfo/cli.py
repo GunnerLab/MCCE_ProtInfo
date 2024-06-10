@@ -128,7 +128,7 @@ def get_single_pdb_report(args: Union[Namespace, dict]):
     prot_d, step1_d = info.collect_info(pdb, args)
 
     report_lines = f"---\n{cli_opts}\n"
-    report_lines += info.collect_info_lines(pdb.stem, prot_d, step1_d)
+    report_lines += info.get_pdb_report_lines(prot_d, step1_d)
     iou.save_report(report_lines, pdb_fp=pdb)
 
     return

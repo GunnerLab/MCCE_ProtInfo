@@ -389,8 +389,10 @@ def filter_heavy_atm_section(pdb: Path, s1_info_d: dict) -> dict:
     """
 
     # termi values are [2-tuples]
-    termi = s1_info_d[pdb.stem]["MCCE.Step1"].get("Termini")
-    heavy = s1_info_d[pdb.stem]["MCCE.Step1"].get("Missing Heavy Atoms")
+    # termi = s1_info_d[pdb.stem]["MCCE.Step1"].get("Termini")
+    # heavy = s1_info_d[pdb.stem]["MCCE.Step1"].get("Missing Heavy Atoms")
+    termi = s1_info_d["MCCE.Step1"].get("Termini")
+    heavy = s1_info_d["MCCE.Step1"].get("Missing Heavy Atoms")
     if heavy is None:
         return s1_info_d
 
@@ -410,7 +412,8 @@ def filter_heavy_atm_section(pdb: Path, s1_info_d: dict) -> dict:
         hvy_lst.append(line)
 
     # update dict
-    s1_info_d[pdb.stem]["MCCE.Step1"]["Missing Heavy Atoms"] = hvy_lst
+    # s1_info_d[pdb.stem]["MCCE.Step1"]["Missing Heavy Atoms"] = hvy_lst
+    s1_info_d["MCCE.Step1"]["Missing Heavy Atoms"] = hvy_lst
 
     return s1_info_d
 
@@ -421,7 +424,8 @@ def info_s1_log(pdb: Path) -> dict:
 
     s1log = RunLog1(pdb)
     # set the section data with dict:
-    dout[pdb.stem] = {"MCCE.Step1": s1log.txt_blocks}
+    # dout[pdb.stem] = {"MCCE.Step1": s1log.txt_blocks}
+    dout = {"MCCE.Step1": s1log.txt_blocks}
     dout = filter_heavy_atm_section(pdb, dout)
 
     return dout
